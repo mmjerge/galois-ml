@@ -1,18 +1,77 @@
 # galois-ml
 
-Machine learning with built-in Galois structure. Two complementary directions:
+A benchmark for evaluating LLMs, single agents, and multi-agent systems
+on scientific discovery, with provable ground truth. The tasks come from
+number theory (Galois groups of number fields), and that choice is the
+point: the underlying mathematics is completely known, so discovery can
+be graded exactly instead of judged approximately.
 
-1. **ML *on* number-theoretic objects** - reproducing and extending
-   [Lee & Lee, *Machines Learn Number Fields, But How? The Case of Galois
-   Groups* (arXiv:2508.06670)](https://arxiv.org/abs/2508.06670): classify
-   Galois groups of Galois extensions of Q from Dedekind zeta coefficients
-   with interpretable models, and compare against the theorems the paper
-   proved by reverse-engineering those models.
+The repo also contains the research toolkit the benchmark grew out of:
+reproductions of [Lee & Lee, *Machines Learn Number Fields, But How? The
+Case of Galois Groups* (arXiv:2508.06670)](https://arxiv.org/abs/2508.06670),
+and Galois-equivariant neural architectures over finite fields.
 
-2. **ML *with* Galois structure built in** - exact GF(p^n) arithmetic,
-   normal bases (in which Frobenius acts by cyclic coordinate shift), and
-   Frobenius-equivariant neural architectures, in the way equivariant
-   networks respect spatial symmetry groups.
+## From theory to application: why this grades scientific discovery
+
+The core problem with evaluating discovery agents is that nobody can
+grade discovery. If an agent analyzes a dataset and announces a law,
+scoring that answer requires knowing the true law, and for real open
+problems nobody does. Existing discovery benchmarks work around this
+with LLM judges or fuzzy rubric matching.
+
+This benchmark takes the other route: plant a law that is provable, and
+grade against it exactly. The chain from theory to application:
+
+1. **The theory constrains the data.** For a Galois number field, the
+   zeta coefficient a_(p^k) is determined by how the prime p splits,
+   and how primes split is constrained by the Galois group (only orders
+   of group elements can occur as inertia degrees, with Chebotarev
+   frequencies). The group leaves provable fingerprints in the data.
+2. **The generative model is fully known.** Because of (1), we can
+   compute exactly what any model could ever achieve on the task: the
+   Bayes-optimal accuracy (a hard ceiling), the exact mutual information
+   of every feature (the true attribution ranking), and the theorem a
+   correct explanation must state (the answer key for the discovery).
+3. **Discovery becomes a scored task.** An agent receives the data and
+   the mathematical setup and must return a prediction rule plus a
+   stated conjecture. The rule is executed against held-out data and
+   scored as regret against the ceiling. The conjecture is compared to
+   the known theorem. Both halves of "did it discover the law" are
+   measurable.
+4. **Fresh tasks separate memorization from reasoning.** The generator
+   works for any finite group given its element orders, so we ship
+   tasks (degree 14, 21, 25) whose criteria follow from the same theory
+   but appear in no publication. Performance on published vs held-out
+   tasks of matched difficulty measures training-data contamination
+   directly.
+
+A multi-agent system plugs into this the same way a single model does:
+the harness treats any `prompt -> text` entry point as a model, or the
+system can be handed the parquet files directly and asked for a rule
+and a conjecture, which are scored by the same machinery.
+
+## Early evidence that the design works
+
+A first (partial, single-seed) run of Claude Sonnet 4.5 through the
+harness showed exactly the separations the benchmark is designed to
+detect:
+
+| task | protocol | accuracy | regret vs ceiling |
+|------|----------|---------:|------------------:|
+| octic_nonabelian | rule induction (data) | 0.960 | +0.016 |
+| degree14 (held out) | rule induction (data) | 0.965 | +0.007 |
+| sextic | derivation (no data) | 0.488 | +0.464 |
+| decic | derivation (no data) | 0.488 | +0.476 |
+| nonic | derivation (no data) | 0.990 | +0.004 |
+| degree14 (held out) | derivation (no data) | 0.958 | +0.014 |
+
+Reading: with data, the model reaches near-ceiling performance. Asked
+to derive rules from pure theory, it collapses to majority-guessing on
+most tasks, except nonic, whose criterion is published in the paper.
+That is a clean contamination signature. Meanwhile it solved held-out
+degree14 by pure reasoning, a genuine (small) mathematical transfer
+that no training corpus contains. Accuracy alone would have blurred all
+three behaviors together.
 
 ## Mathematical background
 
