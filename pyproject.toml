@@ -1,0 +1,34 @@
+[project]
+name = "galois-ml"
+version = "0.2.0"
+description = "Machine learning with built-in Galois structure: an interpretability benchmark with provable ground truth, Galois-equivariant architectures, and reproductions of Lee & Lee (arXiv:2508.06670)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "sympy>=1.12",
+    "scikit-learn>=1.3",
+    "scipy>=1.11",
+    "pyarrow>=14.0",
+]
+
+[project.optional-dependencies]
+# neural network components (galois_ml.equivariant, galois_ml.grokking)
+nn = ["torch>=2.0"]
+# Amazon Bedrock model adapter for the LLM evaluation harness
+bedrock = ["boto3>=1.34"]
+dev = ["pytest>=7.0", "torch>=2.0"]
+
+[project.urls]
+Repository = "https://github.com/mmjerge/galois-ml"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["galois_ml*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
