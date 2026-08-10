@@ -58,7 +58,7 @@ def run_controls() -> list:
     return results
 
 
-def run_bedrock(model_id: str, region: str) -> list:
+def run_bedrock(model_id: str, region: str, out_path: Path) -> list:
     model = BedrockModel(model_id, region=region)
     results = []
     for task in TASKS:
@@ -69,6 +69,10 @@ def run_bedrock(model_id: str, region: str) -> list:
             )
             results.append(res)
             _print(res)
+            # incremental write: interrupted runs keep partial results
+            out_path.write_text(
+                json.dumps([r.to_dict() for r in results], indent=1)
+            )
     return results
 
 
@@ -79,15 +83,14 @@ def main() -> None:
     args = ap.parse_args()
 
     print("(* = held-out, contamination-resistant task)\n")
-    if args.model_id:
-        results = run_bedrock(args.model_id, args.region)
-        stem = args.model_id.replace(":", "_").replace("/", "_")
-    else:
-        results = run_controls()
-        stem = "controls"
-
     OUT.mkdir(parents=True, exist_ok=True)
-    out = OUT / f"llm_eval_{stem}.json"
+    if args.model_id:
+        stem = args.model_id.replace(":", "_").replace("/", "_")
+        out = OUT / f"llm_eval_{stem}.json"
+        results = run_bedrock(args.model_id, args.region, out)
+    else:
+        out = OUT / "llm_eval_controls.json"
+        results = run_controls()
     out.write_text(json.dumps([r.to_dict() for r in results], indent=1))
     print(f"\nresults -> {out}")
 

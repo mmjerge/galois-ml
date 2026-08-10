@@ -54,6 +54,7 @@ class EvalResult:
     conjecture: str | None
     n_test: int
     error: str | None = None
+    raw_response: str | None = None  # truncated; for auditing
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -289,10 +290,27 @@ def evaluate_model(
         bayes_accuracy=benchmark.bayes_accuracy,
         n_test=len(benchmark.y_test),
     )
+    raw = None
+
+    def _ask_and_parse(prompt: str) -> dict:
+        """One retry on unparseable output: re-prompt with a reminder
+        (typical causes: truncation, prose-wrapped or malformed JSON)."""
+        nonlocal raw
+        raw = model(prompt)
+        try:
+            return extract_json(raw)
+        except ValueError:
+            raw = model(
+                prompt
+                + "\n\nREMINDER: your entire response must be a single "
+                "valid JSON object, with no surrounding text."
+            )
+            return extract_json(raw)
+
     try:
         if protocol in ("rule_induction", "derivation"):
             prompt = build_prompt(benchmark, protocol, seed=seed)
-            parsed = extract_json(model(prompt))
+            parsed = _ask_and_parse(prompt)
             code, conjecture = parsed["python"], parsed.get("conjecture")
             preds = run_predict_code(code, benchmark.X_test)
             acc = float(np.mean(preds == benchmark.y_test))
@@ -300,7 +318,7 @@ def evaluate_model(
             prompt, queries = build_classification_prompt(
                 benchmark, seed=seed
             )
-            parsed = extract_json(model(prompt))
+            parsed = _ask_and_parse(prompt)
             labels = np.array(parsed["labels"], dtype=np.int64)
             truth = benchmark.y_test[queries]
             if len(labels) != len(truth):
@@ -320,6 +338,7 @@ def evaluate_model(
             regret=None,
             conjecture=None,
             error=f"{type(exc).__name__}: {exc}",
+            raw_response=raw[:4000] if raw else None,
         )
     return EvalResult(
         **base,
@@ -327,6 +346,7 @@ def evaluate_model(
         accuracy=acc,
         regret=benchmark.bayes_accuracy - acc,
         conjecture=conjecture,
+        raw_response=raw[:4000] if raw else None,
     )
 
 
@@ -399,7 +419,7 @@ class BedrockModel:
         self,
         model_id: str,
         region: str = "us-east-1",
-        max_tokens: int = 4000,
+        max_tokens: int = 16000,
         temperature: float = 0.0,
     ):
         import boto3  # deferred: only needed when actually used
