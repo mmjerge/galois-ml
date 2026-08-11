@@ -38,8 +38,21 @@ chmod +x "$REPO/experiments/_sweep.sh"
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "session '$SESSION' already exists."
   echo "  attach: tmux attach -t $SESSION"
-  echo "  reset:  tmux kill-session -t $SESSION && $0 $*"
+  echo "  reset:  tmux kill-server && $0 $*"
   exit 1
+fi
+
+# IMPORTANT: the tmux *server* caches its environment from whenever it
+# first started. A server left over from an earlier, unauthenticated
+# shell hands that stale environment to every new session, so
+# authenticating inside the session can still fail. Killing the server
+# (not merely the session) is the only reliable reset.
+if tmux ls >/dev/null 2>&1; then
+  echo "existing tmux server found; killing it so the new session gets a"
+  echo "clean environment (stale cached credentials are the usual cause"
+  echo "of 'security token invalid' after a successful login)."
+  tmux kill-server 2>/dev/null || true
+  sleep 1
 fi
 
 # Start a plain interactive shell in the repo. Nothing is scrubbed: the
