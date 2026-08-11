@@ -227,19 +227,51 @@ def build_classification_prompt(
 
 # -- response parsing and sandboxed execution ------------------------------
 
+def _balanced_objects(text: str) -> list[str]:
+    """All top-level balanced {...} spans in `text`, tracking string
+    literals so braces inside quoted strings do not confuse the scan."""
+    spans, stack_depth, start = [], 0, -1
+    in_string, escaped = False, False
+    for i, ch in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if stack_depth == 0:
+                start = i
+            stack_depth += 1
+        elif ch == "}" and stack_depth > 0:
+            stack_depth -= 1
+            if stack_depth == 0:
+                spans.append(text[start : i + 1])
+    return spans
+
+
 def extract_json(text: str) -> dict:
-    """Extract the first JSON object from a model response (tolerates
-    code fences and surrounding prose)."""
+    """Extract the answer JSON object from a model response. Tolerates
+    code fences, surrounding prose, and stray braces in earlier text
+    (e.g. tool outputs quoted in an agent transcript): candidates are
+    balanced brace spans, tried from the end of the response, where the
+    final answer lives."""
+    candidates = []
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    candidates = [fenced.group(1)] if fenced else []
-    brace = text.find("{")
-    if brace != -1:
-        candidates.append(text[brace : text.rfind("}") + 1])
+    if fenced:
+        candidates.append(fenced.group(1))
+    candidates.extend(reversed(_balanced_objects(text)))
     for cand in candidates:
         try:
-            return json.loads(cand)
+            parsed = json.loads(cand)
         except json.JSONDecodeError:
             continue
+        if isinstance(parsed, dict):
+            return parsed
     raise ValueError("no parseable JSON object in response")
 
 

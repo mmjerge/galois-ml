@@ -99,3 +99,20 @@ def test_held_out_task_flows_through_harness():
     )
     assert res.valid_response
     assert res.accuracy >= bench.bayes_accuracy - 0.05
+
+
+def test_extract_json_from_agent_transcript_with_stray_braces():
+    """Agent transcripts quote tool outputs containing braces; the
+    parser must still find the final answer object (regression test for
+    the first live Strands run)."""
+    obj = {"conjecture": "rule", "python": "def predict(zeta):\n    return 0"}
+    transcript = (
+        "Let me inspect a_4.\n"
+        "a_4 distribution by class -- C6: {0: 0.65, 3: 0.2} | S3: {0: 0.35}\n"
+        "Interesting. Distribution {0: 0.65, 21: 0.1}, meaning nonzero\n\n"
+        + json.dumps(obj)
+    )
+    assert extract_json(transcript) == obj
+    # braces inside JSON string values must not break the scan
+    obj2 = {"conjecture": 'uses {braces} and "quotes"', "python": "def predict(zeta):\n    d = {1: 2}\n    return d[1] - 2"}
+    assert extract_json("prose " + json.dumps(obj2) + " trailing") == obj2
