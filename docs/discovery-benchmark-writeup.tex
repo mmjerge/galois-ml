@@ -1,0 +1,205 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=0.9in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{charter}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{amsmath,amssymb}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\repourl}{\url{https://github.com/mmjerge/galois-ml}}
+
+\title{\Large\bfseries Evaluating Agents on Scientific Discovery\\
+\large A Benchmark with Provable Ground Truth from Arithmetic Statistics}
+\author{Michael Jerge}
+\date{August 2026 --- working draft}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\subsection*{Motivation}
+
+Evaluation of LLM-based agents on scientific discovery is
+methodologically circular: scoring a discovered law presupposes
+knowledge of the true law, which is unavailable precisely for the
+problems of interest. Current discovery benchmarks substitute LLM
+judges or rubric matching, inheriting the reliability problems of the
+systems under evaluation. A second confound is contamination: when a
+system states a correct law, standard evaluations cannot distinguish
+derivation from memorization of published results.
+
+We address both issues by construction. The benchmark plants laws that
+are provable theorems, drawn from arithmetic statistics, so that
+discovery can be scored exactly against a known answer key, and
+generates task variants absent from the literature, so that
+memorization and reasoning are separately identifiable.
+
+\subsection*{Task family}
+
+Let $K/\Q$ be a Galois number field with $G = \mathrm{Gal}(K/\Q)$, and
+let $\zeta_K(s) = \sum_{n \ge 1} a_n(K)\, n^{-s}$ be its Dedekind zeta
+function, so that $a_n(K)$ counts ideals of norm $n$. For a rational
+prime $p$ with decomposition type $(e, f, g)$ in $K$ (ramification
+index, inertia degree, and number of primes above $p$, with
+$efg = [K{:}\Q]$), the $p$-Euler factor is $(1 - p^{-fs})^{-g}$, whence
+\[
+a_{p^k}(K) \;=\; \binom{g + k/f - 1}{\,g - 1\,} \text{ if } f \mid k,
+\qquad a_{p^k}(K) = 0 \text{ otherwise},
+\]
+and $a_n$ is determined multiplicatively. The inertia degree $f$ at an
+unramified prime is the order of its Frobenius class, which by
+Chebotarev is equidistributed with respect to the counting measure on
+$G$. Consequently the isomorphism type of $G$ leaves provable
+statistical fingerprints in the coefficient vector
+$(a_1, \dots, a_N)$: only element orders of $G$ occur as inertia
+degrees, with prescribed densities. A representative criterion: for
+$[K{:}\Q] = \ell^2$, the extension is cyclic iff $a_{p^\ell}(K) = 0$
+for some prime $p$; only $C_{\ell^2}$ admits inert primes, and in the
+noncyclic case $a_{p^\ell}$ is provably nonvanishing at every prime,
+ramified or not \cite{LeeLee2025}. Each
+benchmark task is a classification problem: given
+$(a_1, \dots, a_N)$ for a field drawn from this generative model,
+identify $G$ among the groups of the given order, and state the
+distinguishing criterion. The setting follows Lee and
+Lee~\cite{LeeLee2025}, who classified such $G$ with interpretable
+models and promoted the learned decision logic to new theorems.
+
+The benchmark distribution is the exact Chebotarev model: independent
+Frobenius classes at each prime, i.e.\ the idealized unramified
+statistics. This idealization is validated against genuine arithmetic:
+on number fields drawn from the LMFDB (with zeta data computed from
+defining polynomials via Dedekind's theorem), the proven quartic
+criterion classifies at accuracy $1.000$, as the theorem guarantees.
+
+\subsection*{Exact ground truth}
+
+Because the generative model is known in closed form, each task ships
+with quantities that are typically unobtainable:
+
+\begin{itemize}
+  \item \textbf{Bayes-optimal accuracy.} The class-conditional law of
+  the observable prime signatures is an explicit categorical
+  distribution per prime, so the Bayes risk is estimable to
+  $\pm 5 \times 10^{-4}$ by direct signature sampling. Agent
+  performance is reported as regret against this ceiling; the ceiling
+  itself calibrates task difficulty (from $0.9998$ down to $0.84$
+  across the suite).
+  \item \textbf{Exact attribution ground truth.} The mutual information
+  $I(a_n; G)$ is computable in closed form for every feature via the
+  independence of prime-power factors. A system's stated feature
+  attributions are scored against this ranking (rank correlation,
+  precision at $k$), which exposes cases where predictive accuracy and
+  explanation fidelity decouple; we observe decision trees within
+  $0.3\%$ of the ceiling whose importances correlate weakly with the
+  true ranking.
+  \item \textbf{Reference theorems.} The correct explanation for each
+  task is a proven statement (e.g.\ the inert-prime criterion above),
+  serving as the answer key for conjecture grading.
+\end{itemize}
+
+A natural hardening step is formal verification of the answer keys.
+The discrete content of each criterion (the element-order multisets of
+the candidate groups, the vanishing pattern of the Euler coefficients
+as a function of the inertia degree, and the resulting exclusion
+arguments) is directly formalizable in Lean~4 against Mathlib, making
+the ground truth machine-checked rather than merely peer-reviewed. The
+analytic inputs (Euler products, the Chebotarev density theorem) would
+enter as stated hypotheses pending their availability in Mathlib. We
+view machine-checked answer keys as the natural endpoint of the
+benchmark's premise: an evaluation is only as trustworthy as its
+ground truth.
+
+\subsection*{Evaluation protocols and contamination design}
+
+Systems are evaluated under three protocols: \emph{rule induction}
+(data and mathematical context provided; the system must return an
+executable decision rule and a stated conjecture, with the rule scored
+on held-out fields), \emph{derivation} (mathematical context only, no
+data; tests whether the criterion can be derived rather than fit), and
+\emph{direct classification} (few-shot in-context prediction). The
+harness is model-agnostic: any prompt-to-text interface, including a
+multi-agent system behind a single entry point, plugs in unchanged;
+alternatively an agent may be given the dataset files and evaluated on
+its returned artifacts. Sandboxed execution and oracle/majority
+controls validate the pipeline independently of any model.
+
+The generator requires only the element-order multiset of a candidate
+group, so the suite includes tasks for degrees $14$, $21$, and $25$
+whose distinguishing criteria follow from the same theory but, to our
+knowledge, appear in no publication. Matched comparisons between
+published and held-out tasks convert contamination from a hypothesis
+into a measurement.
+
+\subsection*{Preliminary findings}
+
+A preliminary single-seed run of Claude Sonnet 4.5 exhibits the
+separations the design targets. Under rule induction the model attains
+near-ceiling regret on several tasks, including held-out degree $14$
+(regret $0.007$). Under derivation it collapses to majority-class
+performance on most tasks, with one exception: the degree-$9$ task,
+whose criterion is published, where it achieves regret $0.004$. This
+asymmetry is consistent with memorization of the published criterion;
+the decisive comparison is against the structurally matched held-out
+degree-$25$ task (both are the $\ell^2$ family), which is part of the
+full multi-seed evaluation in progress. Notably, the model also scored
+$0.958$ on the held-out degree-$14$ derivation, where no published
+criterion exists; whether its stated conjecture constitutes a correct
+derivation of the inert-prime argument is exactly what the
+conjecture-grading protocol assesses, and the harness now records all
+model outputs for this analysis.
+
+\subsection*{Directions: a testbed for trustworthy multi-agent ML}
+
+Beyond capability evaluation, the framework instruments security and
+trust questions that are normally unmeasurable because harm cannot be
+quantified without ground truth.
+
+\emph{Poisoning with exact damage accounting.} Since the generative
+model is known in closed form, training-distribution attacks can be
+analyzed information-theoretically: perturbing the Chebotarev
+distribution shifts the Bayes ceiling by a computable amount,
+separating the information the attack destroys from the performance
+the learner loses. Standard poisoning studies cannot make this
+distinction.
+
+\emph{Byzantine tolerance of agent pipelines.} In a multi-agent
+discovery system, a compromised member can inject subtly flawed
+analyses. With exact regret as the harm metric, degradation can be
+plotted against the number and subtlety of compromised agents, and the
+detection value of verifier roles measured directly. This is Byzantine
+fault tolerance for epistemic outputs rather than messages.
+
+\emph{Faithfulness auditing.} Gradeable explanations expose systems
+that are right for the wrong reasons; we already observe models within
+$0.3\%$ of the ceiling whose stated feature attributions correlate
+weakly with the true information ranking. In a security setting this
+is the difference between passing accuracy gates and being
+trustworthy.
+
+A first instrument for these questions is implemented: a tool-using
+multi-agent pipeline (Strands agents on Amazon Bedrock) in which an
+analyst agent explores the data and proposes a rule, and an
+independent critic agent verifies or revises it. Four conditions
+(analyst alone, analyst with critic, a simulated compromised analyst,
+and the compromised analyst with critic) make the value of
+verification and the harm of a compromised member directly comparable
+on the same tasks; this evaluation is in progress. These questions
+seem complementary to the APWA evaluation agenda.
+
+Code, benchmark suite (18 configurations, Hugging Face format), and
+harness: \repourl.
+
+\begin{thebibliography}{1}
+
+\bibitem{LeeLee2025}
+K.-H. Lee and S. Lee,
+\emph{Machines Learn Number Fields, But How? The Case of Galois Groups},
+arXiv:2508.06670 [math.NT], 2025.
+\url{https://arxiv.org/abs/2508.06670}
+
+\end{thebibliography}
+
+\end{document}
