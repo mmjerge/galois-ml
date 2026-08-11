@@ -7,8 +7,11 @@ MODEL_ID="${1:?model id required}"
 SEEDS="${2:-3}"
 PYTHON="/opt/anaconda3/bin/python3"
 
-# Scrub stale Bedrock/STS env credentials so boto3 uses ~/.aws instead.
-unset AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+# NOTE: credentials are intentionally NOT scrubbed here. This script is
+# meant to run inside an already-authenticated shell (see run_all.sh):
+# session-scoped auth exports credentials into the environment, so
+# unsetting them would discard the very credentials we need. If you hit
+# an expired-token error, re-authenticate in this shell and rerun.
 
 echo "=== preflight: verifying Bedrock access ==="
 if ! "$PYTHON" -c "
@@ -16,7 +19,10 @@ from galois_ml.llm_eval import BedrockModel
 m = BedrockModel('$MODEL_ID', max_tokens=64)
 print('bedrock ok:', m('Reply with the single word: ready').strip()[:40])
 "; then
-  echo "PREFLIGHT FAILED: re-authenticate (isengard), then rerun experiments/run_all.sh"
+  echo
+  echo "PREFLIGHT FAILED: no valid Bedrock credentials in THIS shell."
+  echo "Authenticate here (you are already inside the tmux session), then"
+  echo "rerun:  ./experiments/_sweep.sh '$MODEL_ID' '$SEEDS'"
   exit 1
 fi
 
