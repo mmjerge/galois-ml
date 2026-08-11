@@ -7,11 +7,18 @@ MODEL_ID="${1:?model id required}"
 SEEDS="${2:-3}"
 PYTHON="/opt/anaconda3/bin/python3"
 
-# NOTE: credentials are intentionally NOT scrubbed here. This script is
-# meant to run inside an already-authenticated shell (see run_all.sh):
-# session-scoped auth exports credentials into the environment, so
-# unsetting them would discard the very credentials we need. If you hit
-# an expired-token error, re-authenticate in this shell and rerun.
+# Unset ONLY the Bedrock bearer token. boto3 gives it precedence over
+# ordinary AWS credentials for Bedrock calls, so a stale one (e.g. a
+# hardcoded `export AWS_BEARER_TOKEN_BEDROCK=...` in ~/.zshrc) causes
+# "Bearer Token has expired" no matter how recently you authenticated.
+# The STS credentials (AWS_ACCESS_KEY_ID / SECRET / SESSION_TOKEN) are
+# deliberately preserved: session-scoped auth provides them and they are
+# what we actually want to use.
+if [[ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ]]; then
+  echo "note: unsetting AWS_BEARER_TOKEN_BEDROCK for this run"
+  echo "      (it overrides your session credentials; see ~/.zshrc)"
+  unset AWS_BEARER_TOKEN_BEDROCK
+fi
 
 echo "=== preflight: verifying Bedrock access ==="
 if ! "$PYTHON" -c "

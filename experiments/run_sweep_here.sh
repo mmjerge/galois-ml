@@ -28,6 +28,17 @@ cd "$REPO"
 mkdir -p experiments/outputs
 chmod +x experiments/_sweep.sh
 
+# Unset ONLY the Bedrock bearer token: boto3 prefers it over ordinary
+# AWS credentials for Bedrock, so a stale one (commonly a hardcoded
+# export in ~/.zshrc) yields "Bearer Token has expired" regardless of
+# how recently you authenticated. STS credentials are preserved.
+if [[ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ]]; then
+  echo "note: AWS_BEARER_TOKEN_BEDROCK is set and takes precedence over"
+  echo "      your session credentials; unsetting it for this run."
+  echo "      To fix permanently, remove/refresh line 32 of ~/.zshrc."
+  unset AWS_BEARER_TOKEN_BEDROCK
+fi
+
 if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   echo "a sweep is already running (PID $(cat "$PIDFILE"))."
   echo "  monitor: tail -f $LOG"
