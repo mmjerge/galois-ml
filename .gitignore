@@ -219,3 +219,4 @@ __marimo__/
 .lmfdb_cache/
 benchmarks/
 experiments/outputs/
+experiments/figures/

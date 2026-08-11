@@ -239,14 +239,20 @@ def _task_brief(bench: GaloisBenchmark) -> str:
     )
 
 
-def _make_agent(model_id: str, region: str, system_prompt: str, tools: list):
+def _make_agent(
+    model_id: str,
+    region: str,
+    system_prompt: str,
+    tools: list,
+    temperature: float = 0.0,
+):
     from strands import Agent
     from strands.models import BedrockModel
 
     model = BedrockModel(
         model_id=model_id,
         region_name=region,
-        temperature=0.0,
+        temperature=temperature,
         max_tokens=16000,
     )
     return Agent(model=model, system_prompt=system_prompt, tools=tools,
