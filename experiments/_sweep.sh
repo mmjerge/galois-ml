@@ -7,6 +7,12 @@ MODEL_ID="${1:?model id required}"
 SEEDS="${2:-3}"
 PYTHON="/opt/anaconda3/bin/python3"
 
+# Python block-buffers stdout when it is a file rather than a terminal,
+# which makes a redirected log look frozen for many minutes even while
+# the sweep is progressing normally. Force line buffering so `tail -f`
+# reflects real-time progress.
+export PYTHONUNBUFFERED=1
+
 # Unset ONLY the Bedrock bearer token. boto3 gives it precedence over
 # ordinary AWS credentials for Bedrock calls, so a stale one (e.g. a
 # hardcoded `export AWS_BEARER_TOKEN_BEDROCK=...` in ~/.zshrc) causes
