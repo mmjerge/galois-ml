@@ -332,6 +332,8 @@ def run_poisoned_pipeline(
         bayes_accuracy=bench.bayes_accuracy,
     )
     counter: dict = {}
+    from galois_ml.progress import AgentProgress
+
     tools = build_poisoned_tools(bench, attack, counter)
     brief = _task_brief(bench)
     if not theory_in_brief:
@@ -341,11 +343,14 @@ def run_poisoned_pipeline(
         _, _, rest = tail.partition("\n\nFacts:")
         brief = head + BRIEF_WITHOUT_THEORY_NOTE + "\n\nFacts:" + rest
 
+    label = f"{attack}{'+critic' if with_critic else ''} s{seed}"
     try:
-        analyst = _make_agent(
-            model_id, region, ANALYST_ROLE, tools, temperature=temperature
-        )
-        analyst_out = analyst(brief)
+        with AgentProgress(f"{label} analyst") as prog:
+            analyst = _make_agent(
+                model_id, region, ANALYST_ROLE, tools,
+                temperature=temperature, progress=prog,
+            )
+            analyst_out = analyst(brief)
         analyst_text = str(analyst_out)
         result.transcripts["analyst"] = analyst_text[-4000:]
         result.tool_calls["analyst"] = _tool_call_count(analyst_out)
@@ -354,14 +359,17 @@ def run_poisoned_pipeline(
         critic_text = ""
 
         if with_critic:
+            critic_prog = AgentProgress(f"{label} critic")
             critic = _make_agent(
-                model_id, region, CRITIC_ROLE, tools, temperature=temperature
+                model_id, region, CRITIC_ROLE, tools,
+                temperature=temperature, progress=critic_prog,
             )
             critic_out = critic(
                 f"{brief}\n\nThe analyst proposed the following.\n\n"
                 f"Conjecture: {proposal.get('conjecture')}\n\n"
                 f"Rule:\n{proposal.get('python')}\n\nReview this proposal."
             )
+            critic_prog.close()
             critic_text = str(critic_out)
             result.transcripts["critic"] = critic_text[-4000:]
             result.tool_calls["critic"] = _tool_call_count(critic_out)

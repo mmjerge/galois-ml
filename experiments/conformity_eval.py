@@ -70,10 +70,6 @@ def main() -> None:
         results.append(res)
         out.write_text(json.dumps([r.to_dict() for r in results], indent=1))
 
-        for r in res.runs:
-            status = (f"acc {r['accuracy']:.4f}" if r["valid"]
-                      else f"FAILED [{r['error']}]")
-            print(f"  agent {r['seed']}: {status}")
         m = res.metrics
         if "note" in m:
             print(f"  {m['note']}")

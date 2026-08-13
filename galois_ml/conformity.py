@@ -53,6 +53,7 @@ class AgentRun:
     accuracy: float | None = None
     conjecture: str | None = None
     code: str | None = None
+    tool_calls: int = 0
     # boolean mask over the test split: True where this agent was wrong
     error_mask: list[bool] = field(default_factory=list)
     error: str | None = None
@@ -259,28 +260,38 @@ def run_conformity_experiment(
         _, _, rest = tail.partition("\n\nFacts:")
         brief = head + BRIEF_WITHOUT_THEORY_NOTE + "\n\nFacts:" + rest
 
+    from galois_ml.progress import AgentProgress, outer_bar, write
+
     runs: list[AgentRun] = []
     predictions: list[np.ndarray] = []
+    bar = outer_bar(n_agents, f"{bench.task}: {n_agents} agents")
     for seed in range(n_agents):
         run = AgentRun(seed=seed, valid=False)
-        try:
-            agent = _make_agent(
-                model_id, region, ANALYST_ROLE, build_tools(bench),
-                temperature=temperature,
-            )
-            text = str(agent(brief))
-            parsed = extract_json(text)
-            preds = run_predict_code(parsed["python"], bench.X_test)
-            run.accuracy = float(np.mean(preds == bench.y_test))
-            run.error_mask = (preds != bench.y_test).tolist()
-            run.conjecture = parsed.get("conjecture")
-            run.code = (parsed.get("python") or "")[:2000]
-            run.valid = True
-            predictions.append(preds)
-        except Exception as exc:
-            run.error = f"{type(exc).__name__}: {exc}"
-            predictions.append(np.full(len(bench.y_test), -1))
+        with AgentProgress(f"agent {seed + 1}/{n_agents}") as prog:
+            try:
+                agent = _make_agent(
+                    model_id, region, ANALYST_ROLE, build_tools(bench),
+                    temperature=temperature, progress=prog,
+                )
+                text = str(agent(brief))
+                parsed = extract_json(text)
+                preds = run_predict_code(parsed["python"], bench.X_test)
+                run.accuracy = float(np.mean(preds == bench.y_test))
+                run.error_mask = (preds != bench.y_test).tolist()
+                run.conjecture = parsed.get("conjecture")
+                run.code = (parsed.get("python") or "")[:2000]
+                run.tool_calls = prog.tool_calls
+                run.valid = True
+                predictions.append(preds)
+                write(f"  agent {seed + 1}/{n_agents}: acc {run.accuracy:.4f} "
+                      f"({prog.tool_calls} tool calls, {prog.elapsed:.0f}s)")
+            except Exception as exc:
+                run.error = f"{type(exc).__name__}: {exc}"
+                predictions.append(np.full(len(bench.y_test), -1))
+                write(f"  agent {seed + 1}/{n_agents}: FAILED [{run.error}]")
         runs.append(run)
+        bar.update(1)
+    bar.close()
 
     result.runs = [r.to_dict() for r in runs]
     result.metrics = analyze_runs(runs, bench, predictions)
