@@ -34,6 +34,7 @@ from pathlib import Path
 import sys as _sys, pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
 
+from galois_ml._deps import require_agents
 from galois_ml.benchmark import load_benchmark
 from galois_ml.conformity import run_conformity_experiment
 
@@ -42,6 +43,7 @@ N_COEFFS = 1000
 
 
 def main() -> None:
+    require_agents()
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-id", required=True)
     ap.add_argument("--region", default="us-east-1")

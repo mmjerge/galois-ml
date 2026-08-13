@@ -23,6 +23,7 @@ from pathlib import Path
 import sys as _sys, pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
 
+from galois_ml._deps import require_bedrock
 from galois_ml.benchmark import load_benchmark
 from galois_ml.groups import PAPER_TASKS, TASKS
 from galois_ml.llm_eval import (
@@ -81,6 +82,7 @@ def run_bedrock(model_id: str, region: str, out_path: Path) -> list:
 
 
 def main() -> None:
+    require_bedrock()
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-id", default=None)
     ap.add_argument("--region", default="us-east-1")
