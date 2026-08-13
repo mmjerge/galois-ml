@@ -170,29 +170,6 @@ subtlety of the compromise, and the verification topology (single
 critic, quorum, adversarial critic)? Exact regret makes this a
 plottable curve rather than an anecdote.
 
-\emph{A second, higher-stakes domain.} The same recipe --- a
-provable law, a hidden statistical fingerprint, procedurally fresh
-instances --- applies beyond number theory to combinatorial group
-theory, where the payload is an active cryptographic primitive rather
-than a classification exercise. The word problem in an infinite
-non-abelian group is undecidable in general but efficiently solvable
-for specific families, and this asymmetry underlies post-quantum
-group-based cryptosystems such as Wagner--Magyarik. A recent
-preprint~\cite{Fink2026} trains a graph neural network to predict
-geodesic length in the Baumslag--Solitar group and an Artin group
-directly from unreduced words, and uses the learned structure to break
-Wagner--Magyarik's direct-decryption security. Notably, that work
-independently adopts on-demand instance generation for the same reason
-argued here: a fixed training table induces memorization of syntactic
-patterns rather than the algebraic invariant, whereas procedural
-generation forces genuine structural learning. Grafting a geodesic-
-length task family onto this testbed, with geodesic length as the
-provable ground truth and group family (hyperbolic through
-Baumslag--Solitar) as a tunable difficulty knob, would let the same
-trust experiments --- poisoning, Byzantine tolerance, leakage
-assessment --- be run against a discovery target with a live
-cryptographic stake rather than a purely mathematical one.
-
 \subsection*{Evaluation protocols and contamination design}
 
 Systems are evaluated under three protocols: \emph{rule induction}
@@ -279,13 +256,6 @@ K.-H. Lee and S. Lee,
 \emph{Machines Learn Number Fields, But How? The Case of Galois Groups},
 arXiv:2508.06670 [math.NT], 2025.
 \url{https://arxiv.org/abs/2508.06670}
-
-\bibitem{Fink2026}
-E. Fink,
-\emph{Learning the Word Problem: Geodesic Lengths and Cryptographic
-Applications},
-arXiv:2607.26241, 2026.
-\url{https://arxiv.org/abs/2607.26241}
 
 \end{thebibliography}
 
