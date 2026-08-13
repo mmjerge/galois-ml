@@ -11,8 +11,9 @@
 \newcommand{\Q}{\mathbb{Q}}
 \newcommand{\repourl}{\url{https://github.com/mmjerge/galois-ml}}
 
-\title{\Large\bfseries Evaluating Agents on Scientific Discovery\\
-\large A Benchmark with Provable Ground Truth from Arithmetic Statistics}
+\title{\Large\bfseries Trustworthy Multi-Agent ML via Cryptographically\\
+Grounded Discovery Tasks\\
+\large A Testbed with Provable Ground Truth and Exact Information Leakage}
 \author{Michael Jerge}
 \date{August 2026 --- working draft}
 
@@ -22,20 +23,32 @@
 
 \subsection*{Motivation}
 
-Evaluation of LLM-based agents on scientific discovery is
-methodologically circular: scoring a discovered law presupposes
-knowledge of the true law, which is unavailable precisely for the
-problems of interest. Current discovery benchmarks substitute LLM
-judges or rubric matching, inheriting the reliability problems of the
-systems under evaluation. A second confound is contamination: when a
-system states a correct law, standard evaluations cannot distinguish
-derivation from memorization of published results.
+Trust in multi-agent ML pipelines is normally asserted, not measured.
+When a system of agents proposes a conclusion, we lack the tools to
+say exactly how much a compromised member could damage the outcome,
+how many bits an untrusted channel leaked, or whether a verifier agent
+adds real assurance or merely a second opinion. Cryptography has
+precise language for exactly these questions --- information leakage
+in bits, prover/verifier soundness, Byzantine fault tolerance under a
+threshold of corrupted parties --- but that language requires a setting
+with known ground truth to instantiate, and most ML settings do not
+have one.
 
-We address both issues by construction. The benchmark plants laws that
-are provable theorems, drawn from arithmetic statistics, so that
-discovery can be scored exactly against a known answer key, and
-generates task variants absent from the literature, so that
-memorization and reasoning are separately identifiable.
+Evaluation of LLM-based agents on scientific discovery has a matching
+gap: scoring a discovered law presupposes knowledge of the true law,
+which is unavailable for the problems of real interest. Current
+discovery benchmarks substitute LLM judges or rubric matching,
+inheriting the reliability problems of the systems under evaluation. A
+second confound is contamination: when a system states a correct law,
+standard evaluations cannot distinguish derivation from memorization.
+
+This work addresses both gaps with one construction: tasks whose
+generative law is a provable theorem, drawn from arithmetic statistics
+with a direct cryptographic reading. Because the law is known exactly,
+we can compute the Bayes-optimal ceiling, the exact information content
+of every observable in bits, and a machine-checkable answer key ---
+turning "is this multi-agent pipeline trustworthy" from a qualitative
+judgment into a set of measured quantities.
 
 \subsection*{Task family}
 
@@ -112,6 +125,51 @@ view machine-checked answer keys as the natural endpoint of the
 benchmark's premise: an evaluation is only as trustworthy as its
 ground truth.
 
+\subsection*{Cryptographic grounding}
+
+The exact-ground-truth machinery above is not merely convenient for
+grading; each piece has a direct cryptographic reading, which is what
+makes the testbed suitable for trustworthy-ML questions rather than
+capability questions alone.
+
+\emph{Mutual information as leakage.} $I(a_n; G)$ is, literally, the
+number of bits an observable coefficient leaks about a secret (the
+Galois group). Scoring a system's stated feature attributions against
+this exact quantity is the same primitive as side-channel leakage
+assessment: does the adversary's (here, the agent's) inferred
+importance ranking match the true leakage profile, or does it
+over-attend to non-leaking observables while missing the real channel?
+Because the leakage is computed in closed form rather than estimated
+from traces, this gives a noise-free testbed for leakage-detection
+methodology itself.
+
+\emph{Analyst/critic as prover/verifier.} The two-agent pipeline
+(Section on directions, below) is structurally an interactive proof:
+an analyst (prover) claims a rule; a critic (verifier) must accept or
+reject using only tool queries against the data, without an a priori
+trusted computation of the answer. Soundness (the verifier rejects
+false claims) and completeness (the verifier accepts true claims) are
+directly measurable, because the true claim is known to us even though
+it is not given to the verifier.
+
+\emph{Poisoning as a chosen-distribution attack with exact damage.}
+Because the generative model is closed form, a poisoning attack on the
+training distribution or on an agent's tool channel has a computable
+effect on the Bayes ceiling: the information destroyed by the attack
+is a bit quantity, and the performance actually lost by the pipeline
+is a separate, comparable bit quantity. This is the natural analogue
+of measuring an attack's advantage in a cryptographic security game,
+applied to a data-poisoning rather than a cipher-breaking adversary.
+
+\emph{Byzantine tolerance as a threshold property.} With $k$ agents and
+$t$ compromised, standard secure multi-party protocols guarantee
+correctness once $t$ is below a known threshold. The same question is
+open and largely unmeasured for multi-agent \emph{epistemic} pipelines:
+how does discovery accuracy degrade as a function of $t$, the
+subtlety of the compromise, and the verification topology (single
+critic, quorum, adversarial critic)? Exact regret makes this a
+plottable curve rather than an anecdote.
+
 \subsection*{Evaluation protocols and contamination design}
 
 Systems are evaluated under three protocols: \emph{rule induction}
@@ -151,43 +209,42 @@ derivation of the inert-prime argument is exactly what the
 conjecture-grading protocol assesses, and the harness now records all
 model outputs for this analysis.
 
-\subsection*{Directions: a testbed for trustworthy multi-agent ML}
+\subsection*{Implemented instrument and current experiments}
 
-Beyond capability evaluation, the framework instruments security and
-trust questions that are normally unmeasurable because harm cannot be
-quantified without ground truth.
+A first instrument for the trust questions above is implemented: a
+tool-using multi-agent pipeline (Strands agents on Amazon Bedrock) in
+which an analyst agent explores the data through tools (inspecting
+per-class coefficient distributions, testing candidate rules against a
+validation split) and proposes a rule and conjecture, and an
+independent critic agent verifies or revises it using the same tools.
+Two experiment families are in progress, both scored as regret against
+the same computable ceiling:
 
-\emph{Poisoning with exact damage accounting.} Since the generative
-model is known in closed form, training-distribution attacks can be
-analyzed information-theoretically: perturbing the Chebotarev
-distribution shifts the Bayes ceiling by a computable amount,
-separating the information the attack destroys from the performance
-the learner loses. Standard poisoning studies cannot make this
-distinction.
+\emph{Agent-level compromise.} Four conditions --- analyst alone,
+analyst with critic, a simulated compromised analyst (instructed to
+produce a plausible but subtly flawed rule), and the compromised
+analyst with critic --- make the value of verification and the harm of
+a compromised member directly comparable on the same tasks.
 
-\emph{Byzantine tolerance of agent pipelines.} In a multi-agent
-discovery system, a compromised member can inject subtly flawed
-analyses. With exact regret as the harm metric, degradation can be
-plotted against the number and subtlety of compromised agents, and the
-detection value of verifier roles measured directly. This is Byzantine
-fault tolerance for epistemic outputs rather than messages.
+\emph{Tool-channel compromise.} Holding the agent prompts honest and
+identical across conditions, we instead corrupt the environment: the
+observation tool reports falsified per-class distributions, the
+validation tool inflates reported accuracy and hides counterexamples,
+tool output carries injected operator-style instructions, or all
+three simultaneously with no honest channel remaining. An initial run
+surfaced a design lesson directly relevant to leakage assessment: when
+the task brief itself contains the group-theoretic facts needed to
+derive the rule, that channel is redundant and an attack on the tool
+channel alone cannot succeed, since the agent can bypass poisoned
+tools entirely. Measuring genuine attack harm requires withholding that
+redundant channel so the tool output is load-bearing --- itself an
+instance of the leakage question above, since it is asking which
+channel actually carries the exploitable information.
 
-\emph{Faithfulness auditing.} Gradeable explanations expose systems
-that are right for the wrong reasons; we already observe models within
-$0.3\%$ of the ceiling whose stated feature attributions correlate
-weakly with the true information ranking. In a security setting this
-is the difference between passing accuracy gates and being
-trustworthy.
-
-A first instrument for these questions is implemented: a tool-using
-multi-agent pipeline (Strands agents on Amazon Bedrock) in which an
-analyst agent explores the data and proposes a rule, and an
-independent critic agent verifies or revises it. Four conditions
-(analyst alone, analyst with critic, a simulated compromised analyst,
-and the compromised analyst with critic) make the value of
-verification and the harm of a compromised member directly comparable
-on the same tasks; this evaluation is in progress. These questions
-seem complementary to the APWA evaluation agenda.
+These experiments are complementary to the APWA evaluation agenda and,
+we believe, a natural point of contact between multi-agent ML
+evaluation and the security group's expertise in cryptographic and
+adversarial analysis.
 
 Code, benchmark suite (18 configurations, Hugging Face format), and
 harness: \repourl.
