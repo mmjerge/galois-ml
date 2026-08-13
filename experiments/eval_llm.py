@@ -19,6 +19,10 @@ import argparse
 import json
 from pathlib import Path
 
+# Make the repo importable regardless of interpreter or install state.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from galois_ml.benchmark import load_benchmark
 from galois_ml.groups import PAPER_TASKS, TASKS
 from galois_ml.llm_eval import (

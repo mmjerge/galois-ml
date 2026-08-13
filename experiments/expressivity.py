@@ -23,6 +23,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+# Make the repo importable regardless of interpreter or install state.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from galois_ml.equivariant import GaloisInvariantNet, PlainMLP
 from galois_ml.finite_field import GF
 

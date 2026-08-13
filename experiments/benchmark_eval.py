@@ -21,6 +21,10 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 
+# Make the repo importable regardless of interpreter or install state.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from galois_ml.benchmark import load_benchmark
 from galois_ml.groups import TASKS
 

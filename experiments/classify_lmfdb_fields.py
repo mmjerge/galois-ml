@@ -20,6 +20,10 @@ import numpy as np
 from sklearn.model_selection import cross_val_score
 from sklearn.tree import DecisionTreeClassifier
 
+# Make the repo importable regardless of interpreter or install state.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from galois_ml.criteria import TheoremClassifier
 from galois_ml.lmfdb import make_lmfdb_dataset
 
