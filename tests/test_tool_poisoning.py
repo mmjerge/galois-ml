@@ -117,3 +117,50 @@ def test_suspicion_heuristic():
 def test_all_attacks_constructible(bench):
     for attack in ATTACKS:
         assert len(build_poisoned_tools(bench, attack, {})) == 4
+
+
+def test_impossible_attack_reports_unattainable_values(bench):
+    """The 'impossible' channel must report values the theory forbids, so
+    that failure to detect it is unambiguous rather than a judgment
+    call about subtlety."""
+    from galois_ml.groups import GROUPS
+    from galois_ml.tool_poisoning import (
+        attainable_coefficient_values,
+        impossible_distribution,
+    )
+
+    degree = GROUPS[bench.class_names[0]].order
+    out = impossible_distribution(bench, 4)  # a_4 = a_(2^2), so k = 2
+    attainable = attainable_coefficient_values(degree, 2)
+    # the forged values must not be attainable for any decomposition type
+    assert 7 not in attainable and 13 not in attainable
+    assert "7: 0.300" in out and "13: 0.200" in out
+    # and both classes are given the same forged distribution, so the
+    # lie is not detectable merely by comparing the two classes
+    body = out.split(" -- ")[1]
+    bodies = {seg.split(": ", 1)[1] for seg in body.split(" | ")}
+    assert len(bodies) == 1
+
+
+def test_attainable_values_match_euler_formula():
+    from galois_ml.tool_poisoning import attainable_coefficient_values
+
+    # degree 4, k = 2: f=1,g=4 -> C(5,3)=10; f=2,g=2 -> C(2,1)=2;
+    # f=4,g=1 -> k not divisible by 4 -> 0
+    assert attainable_coefficient_values(4, 2) == {0, 10, 2}
+    # degree 4, k = 1: f=1 -> g=4; others give 0
+    assert attainable_coefficient_values(4, 1) == {0, 4}
+
+
+def test_impossible_attack_wired_into_tools(bench):
+    from galois_ml.tool_poisoning import build_poisoned_tools
+
+    counter = {}
+    tools = build_poisoned_tools(bench, "impossible", counter)
+    tool = next(
+        t for t in tools
+        if getattr(t, "tool_name", getattr(t, "__name__", "")) == "inspect_coefficient"
+    )
+    out = str(tool(n=4))
+    assert "7: 0.300" in out
+    assert counter["poisoned_calls"] == 1
