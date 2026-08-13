@@ -64,7 +64,10 @@ class AgentProgress:
             leave=False,
             file=sys.stdout,
             dynamic_ncols=True,
-            bar_format="{desc}: {n} tool calls [{elapsed}] {postfix}",
+            # note: tqdm prefixes {postfix} with ", " when set via
+            # set_postfix_str, so the tool name is carried in {desc}
+            # instead to keep the line clean
+            bar_format="{desc}: {n} tool calls [{elapsed}]",
         )
 
     @property
@@ -84,14 +87,18 @@ class AgentProgress:
             if name and tool_id and tool_id not in self._seen:
                 self._seen.add(tool_id)
                 self.tool_calls += 1
+                self._bar.set_description_str(
+                    f"  {self.label} -> {name}", refresh=False
+                )
                 self._bar.update(1)
-                self._bar.set_postfix_str(name, refresh=True)
         except Exception:
             pass  # never let reporting break a run
 
     def close(self, outcome: str = "") -> None:
         if outcome:
-            self._bar.set_postfix_str(outcome, refresh=True)
+            self._bar.set_description_str(
+                f"  {self.label} ({outcome})", refresh=True
+            )
         self._bar.close()
 
     def __enter__(self) -> "AgentProgress":
