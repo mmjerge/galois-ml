@@ -51,6 +51,12 @@ def main() -> None:
     ap.add_argument("--agents", type=int, default=5)
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--no-theory-in-brief", action="store_true")
+    ap.add_argument(
+        "--max-tool-calls", type=int, default=None,
+        help="cap tool calls per agent (default 100; 0 = unlimited). "
+             "On exhaustion tools instruct the agent to finalize "
+             "rather than erroring, so the run still yields a result.",
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -66,6 +72,7 @@ def main() -> None:
             bench, args.model_id, n_agents=args.agents, region=args.region,
             temperature=args.temperature,
             theory_in_brief=not args.no_theory_in_brief,
+                    max_tool_calls=args.max_tool_calls,
         )
         results.append(res)
         out.write_text(json.dumps([r.to_dict() for r in results], indent=1))

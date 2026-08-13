@@ -63,6 +63,12 @@ def main() -> None:
     ap.add_argument("--no-theory-in-brief", action="store_true")
     ap.add_argument("--no-critic-runs", action="store_true")
     ap.add_argument("--out-suffix", default="")
+    ap.add_argument(
+        "--max-tool-calls", type=int, default=None,
+        help="cap tool calls per agent (default 100; 0 = unlimited). "
+             "On exhaustion tools instruct the agent to finalize "
+             "rather than erroring, so the run still yields a result.",
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -90,6 +96,7 @@ def main() -> None:
                         region=args.region, seed=seed,
                         theory_in_brief=theory,
                         temperature=args.temperature,
+                    max_tool_calls=args.max_tool_calls,
                     )
                     results.append(res)
                     out.write_text(

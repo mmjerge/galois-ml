@@ -45,6 +45,12 @@ def main() -> None:
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--tasks", nargs="+", default=DEFAULT_TASKS)
     ap.add_argument("--conditions", nargs="+", default=list(CONDITIONS))
+    ap.add_argument(
+        "--max-tool-calls", type=int, default=None,
+        help="cap tool calls per agent (default 100; 0 = unlimited). "
+             "On exhaustion tools instruct the agent to finalize "
+             "rather than erroring, so the run still yields a result.",
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -57,7 +63,9 @@ def main() -> None:
         print(f"\n== {task} (ceiling {bench.bayes_accuracy:.4f}) ==")
         for condition in args.conditions:
             res = run_pipeline(
-                bench, args.model_id, condition, region=args.region
+                bench, args.model_id, condition,
+                region=args.region,
+                max_tool_calls=args.max_tool_calls,
             )
             results.append(res)
             out.write_text(

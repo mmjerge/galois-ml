@@ -54,6 +54,7 @@ class AgentRun:
     conjecture: str | None = None
     code: str | None = None
     tool_calls: int = 0
+    budget: dict = field(default_factory=dict)
     # boolean mask over the test split: True where this agent was wrong
     error_mask: list[bool] = field(default_factory=list)
     error: str | None = None
@@ -230,6 +231,7 @@ def run_conformity_experiment(
     region: str = "us-east-1",
     temperature: float = 1.0,
     theory_in_brief: bool = True,
+    max_tool_calls: int | None = None,
 ) -> ConformityResult:
     """Run n independent analyst agents on the same task and measure
     whether their failures are independent.
@@ -260,6 +262,7 @@ def run_conformity_experiment(
         _, _, rest = tail.partition("\n\nFacts:")
         brief = head + BRIEF_WITHOUT_THEORY_NOTE + "\n\nFacts:" + rest
 
+    from galois_ml.budget import DEFAULT_MAX_TOOL_CALLS, ToolBudget
     from galois_ml.progress import AgentProgress, outer_bar, write
 
     runs: list[AgentRun] = []
@@ -267,10 +270,15 @@ def run_conformity_experiment(
     bar = outer_bar(n_agents, f"{bench.task}: {n_agents} agents")
     for seed in range(n_agents):
         run = AgentRun(seed=seed, valid=False)
+        budget = ToolBudget(
+            limit=DEFAULT_MAX_TOOL_CALLS if max_tool_calls is None
+            else max_tool_calls
+        )
         with AgentProgress(f"agent {seed + 1}/{n_agents}") as prog:
             try:
                 agent = _make_agent(
-                    model_id, region, ANALYST_ROLE, build_tools(bench),
+                    model_id, region, ANALYST_ROLE,
+                    build_tools(bench, budget=budget),
                     temperature=temperature, progress=prog,
                 )
                 text = str(agent(brief))
@@ -281,10 +289,13 @@ def run_conformity_experiment(
                 run.conjecture = parsed.get("conjecture")
                 run.code = (parsed.get("python") or "")[:2000]
                 run.tool_calls = prog.tool_calls
+                run.budget = budget.summary()
                 run.valid = True
                 predictions.append(preds)
+                capped = " [BUDGET CAPPED]" if budget.exhausted else ""
                 write(f"  agent {seed + 1}/{n_agents}: acc {run.accuracy:.4f} "
-                      f"({prog.tool_calls} tool calls, {prog.elapsed:.0f}s)")
+                      f"({prog.tool_calls} tool calls, "
+                      f"{prog.elapsed:.0f}s){capped}")
             except Exception as exc:
                 run.error = f"{type(exc).__name__}: {exc}"
                 predictions.append(np.full(len(bench.y_test), -1))

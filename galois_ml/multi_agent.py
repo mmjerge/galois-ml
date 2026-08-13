@@ -53,6 +53,7 @@ class PipelineResult:
     analyst_conjecture: str | None = None
     final_conjecture: str | None = None
     tool_calls: dict = field(default_factory=dict)  # per-stage counts
+    budgets: dict = field(default_factory=dict)  # per-stage budget usage
     error: str | None = None
     transcripts: dict = field(default_factory=dict)  # truncated, for audit
 
@@ -196,34 +197,46 @@ your correction with test_rule. End with ONLY a JSON object:
 
 # -- agent construction and orchestration -----------------------------------
 
-def build_tools(bench: GaloisBenchmark) -> list:
-    """Strands tools closed over a benchmark's data."""
+def build_tools(bench: GaloisBenchmark, budget=None) -> list:
+    """Strands tools closed over a benchmark's data.
+
+    `budget` is an optional ToolBudget; when exhausted, tools return an
+    instruction to finalize rather than raising, so the run still
+    produces a scoreable answer.
+    """
     from strands import tool
+
+    def _blocked(tool_name: str) -> str | None:
+        return budget.charge(tool_name) if budget is not None else None
 
     @tool
     def inspect_coefficient(n: int) -> str:
         """Show the per-class empirical distribution of the zeta
         coefficient a_n on the training data. n is 1-based."""
-        return coefficient_distribution(bench, n)
+        stop = _blocked("inspect_coefficient")
+        return stop if stop else coefficient_distribution(bench, n)
 
     @tool
     def list_prime_powers() -> str:
         """List which coefficient indices up to N are prime powers p^k
         (these are the structurally meaningful coefficients)."""
-        return prime_power_indices(bench)
+        stop = _blocked("list_prime_powers")
+        return stop if stop else prime_power_indices(bench)
 
     @tool
     def test_rule(code: str) -> str:
         """Execute a candidate rule on a validation split and report its
         accuracy plus a few misclassified examples. `code` must define
         predict(zeta) -> int taking the list of coefficients."""
-        return validate_rule(bench, code)
+        stop = _blocked("test_rule")
+        return stop if stop else validate_rule(bench, code)
 
     @tool
     def show_examples(label: int) -> str:
         """Show sample training fields with the given integer label, as
         prime-power coefficient signatures."""
-        return labeled_examples(bench, label)
+        stop = _blocked("show_examples")
+        return stop if stop else labeled_examples(bench, label)
 
     return [inspect_coefficient, list_prime_powers, test_rule, show_examples]
 
@@ -284,9 +297,12 @@ def run_pipeline(
     model_id: str,
     condition: str = "analyst_critic",
     region: str = "us-east-1",
+    max_tool_calls: int | None = None,
 ) -> PipelineResult:
     """Run one multi-agent discovery pipeline on one benchmark task and
     score the final rule against the ground truth."""
+    from galois_ml.budget import DEFAULT_MAX_TOOL_CALLS, ToolBudget
+
     if condition not in CONDITIONS:
         raise ValueError(f"condition must be one of {CONDITIONS}")
     result = PipelineResult(
@@ -296,7 +312,12 @@ def run_pipeline(
         valid=False,
         bayes_accuracy=bench.bayes_accuracy,
     )
-    tools = build_tools(bench)
+    limit = DEFAULT_MAX_TOOL_CALLS if max_tool_calls is None else max_tool_calls
+    # each stage gets its own budget so a talkative analyst cannot
+    # starve the critic of the calls it needs to verify
+    analyst_budget = ToolBudget(limit=limit)
+    critic_budget = ToolBudget(limit=limit)
+    tools = build_tools(bench, budget=analyst_budget)
     brief = _task_brief(bench)
     role = SABOTEUR_ROLE if condition.startswith("saboteur") else ANALYST_ROLE
 
@@ -326,7 +347,9 @@ def run_pipeline(
             )
             with AgentProgress(f"{condition} critic") as cprog:
                 critic = _make_agent(
-                    model_id, region, CRITIC_ROLE, tools, progress=cprog
+                    model_id, region, CRITIC_ROLE,
+                    build_tools(bench, budget=critic_budget),
+                    progress=cprog,
                 )
                 critic_out = critic(review_request)
             critic_text = str(critic_out)
@@ -342,7 +365,15 @@ def run_pipeline(
         result.test_accuracy = float(np.mean(preds == bench.y_test))
         result.regret = bench.bayes_accuracy - result.test_accuracy
         result.final_conjecture = final.get("conjecture")
+        result.budgets = {
+            "analyst": analyst_budget.summary(),
+            "critic": critic_budget.summary(),
+        }
         result.valid = True
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"
+        result.budgets = {
+            "analyst": analyst_budget.summary(),
+            "critic": critic_budget.summary(),
+        }
     return result
