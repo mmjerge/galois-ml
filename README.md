@@ -191,6 +191,22 @@ Bayes ceiling, feature MI, export, and evaluation all follow
 generically. The degree14/21/25 held-out tasks were added exactly this
 way.
 
+## Positioning within agentic AI security
+
+`docs/POSITIONING.md` maps each experiment here to published work in
+agentic security (NDS2 Lab's SAGA/SAGA-BFT, MUZZLE, ACE, APWA, and their
+RL-poisoning line) and to Anthropic's Frontier Red Team findings on
+emerging multiagent systems. It deliberately separates claims supported
+by those sources from our own inferences, and states our preliminary
+results at their actual strength (single-seed, coarse detection metric)
+rather than as replications.
+
+The short version: agentic security needs harm and defense efficacy
+measured in absolute terms, which requires tasks whose correct answer is
+known in closed form. That is what this testbed supplies. It covers
+*epistemic* security - correctness, faithfulness, provenance, robustness
+of conclusions - and not sandbox escape or privilege boundaries.
+
 ## Citation
 
 The reproduced paper: Kyu-Hwan Lee and Seewoo Lee, "Machines Learn
