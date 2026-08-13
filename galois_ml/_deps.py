@@ -91,8 +91,36 @@ def require(*modules: str, extra: str | None = None) -> None:
 def require_agents() -> None:
     """Dependencies for the Strands-based multi-agent experiments."""
     require("strands", "boto3", extra="agents,bedrock")
+    scrub_stale_bedrock_token()
 
 
 def require_bedrock() -> None:
     """Dependencies for the single-model Bedrock harness."""
     require("boto3", extra="bedrock")
+    scrub_stale_bedrock_token()
+
+
+def scrub_stale_bedrock_token() -> None:
+    """Remove AWS_BEARER_TOKEN_BEDROCK from the environment.
+
+    boto3 gives this token precedence over ordinary AWS credentials for
+    Bedrock calls, so a stale one (commonly a hardcoded export in a shell
+    profile) produces "Bearer Token has expired" no matter how recently
+    the session was authenticated. Since it masks working credentials, we
+    drop it and say so rather than failing per-agent deep inside a run.
+
+    Set GALOIS_ML_KEEP_BEDROCK_TOKEN=1 to retain it (e.g. if it is the
+    credential you actually intend to use).
+    """
+    import os
+
+    if os.environ.get("GALOIS_ML_KEEP_BEDROCK_TOKEN") == "1":
+        return
+    if os.environ.pop("AWS_BEARER_TOKEN_BEDROCK", None) is not None:
+        print(
+            "note: unset AWS_BEARER_TOKEN_BEDROCK for this run; it takes\n"
+            "      precedence over your session credentials and is a common\n"
+            "      source of 'Bearer Token has expired'. Set\n"
+            "      GALOIS_ML_KEEP_BEDROCK_TOKEN=1 to keep it.",
+            file=sys.stderr,
+        )
