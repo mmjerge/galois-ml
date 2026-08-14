@@ -12,13 +12,26 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON="/opt/anaconda3/bin/python3"
 PIDFILE="$REPO/experiments/outputs/sweep.pid"
+
+# Do not hardcode an interpreter: this runs both on macOS (anaconda) and
+# on EC2 (system python3).
+for _candidate in "${GALOIS_PYTHON:-}" /opt/anaconda3/bin/python3 python3 python; do
+  [[ -z "$_candidate" ]] && continue
+  if command -v "$_candidate" >/dev/null 2>&1; then PYTHON="$_candidate"; break; fi
+done
+PYTHON="${PYTHON:-python3}"
 
 render() {
   cd "$REPO"
+  # the sweep may be running under a pidfile (run_sweep_here.sh) or
+  # inside tmux (run_all.sh / the EC2 host), so check both
   if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
     echo "sweep RUNNING (pid $(cat "$PIDFILE"))"
+  elif command -v tmux >/dev/null 2>&1 && tmux has-session -t galois 2>/dev/null; then
+    echo "sweep RUNNING (tmux session 'galois')"
+  elif pgrep -f "_sweep.sh" >/dev/null 2>&1; then
+    echo "sweep RUNNING (pid $(pgrep -f '_sweep.sh' | head -1))"
   else
     echo "sweep not running (finished, or never started)"
   fi
