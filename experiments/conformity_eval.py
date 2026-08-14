@@ -47,7 +47,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-id", required=True)
     ap.add_argument("--region", default="us-east-1")
-    ap.add_argument("--tasks", nargs="+", default=["sextic"])
+    # quartic is degenerate for this measurement: every agent scores
+    # 1.0000, so there are no errors to overlap and the correlation ratio
+    # is undefined. Tasks with headroom are required for the question
+    # ("do agents fail on the SAME items?") to have any content.
+    ap.add_argument("--tasks", nargs="+", default=["sextic", "degree21"])
     ap.add_argument("--agents", type=int, default=5)
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--no-theory-in-brief", action="store_true")

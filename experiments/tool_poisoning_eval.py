@@ -53,12 +53,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-id", required=True)
     ap.add_argument("--region", default="us-east-1")
-    # quartic by default: its criterion is deterministic (a_{p^2} = 0 for
-    # some p), so an attack either breaks the rule or does not, giving a
-    # much cleaner signal than the density-threshold tasks
-    ap.add_argument("--tasks", nargs="+", default=["quartic"])
+    # NOT quartic. Its ceiling is 0.9998 and agents reach it on every
+    # control run, so there is almost no headroom in which harm can
+    # register -- a 72-run quartic sweep moved the needle only for the
+    # most extreme attack. sextic (ceiling 0.9518) and degree21 (0.9352)
+    # leave measurable room between agent performance and the ceiling,
+    # which is what an attack has to eat into to be observable.
+    ap.add_argument("--tasks", nargs="+", default=["sextic", "degree21"])
     ap.add_argument("--attacks", nargs="+", default=list(ATTACKS))
-    ap.add_argument("--seeds", type=int, default=3)
+    # bimodal conditions (notably `combined`) need more than 3 samples
+    # before a median or a solved/broken split means anything
+    ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--no-theory-in-brief", action="store_true")
     ap.add_argument("--no-critic-runs", action="store_true")
