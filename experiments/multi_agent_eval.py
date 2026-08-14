@@ -45,6 +45,10 @@ def main() -> None:
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--tasks", nargs="+", default=DEFAULT_TASKS)
     ap.add_argument("--conditions", nargs="+", default=list(CONDITIONS))
+    ap.add_argument("--seeds", type=int, default=5)
+    # temperature > 0 is required for repeated seeds to be informative:
+    # at 0 the runs would be near-identical and the spread meaningless
+    ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument(
         "--max-tool-calls", type=int, default=None,
         help="cap tool calls per agent (default 100; 0 = unlimited). "
@@ -58,26 +62,34 @@ def main() -> None:
     out = OUT / f"multi_agent_{stem}.json"
     results = []
 
+    total = len(args.tasks) * len(args.conditions) * args.seeds
+    print(f"{total} runs: {len(args.tasks)} task(s) x {len(args.conditions)} "
+          f"condition(s) x {args.seeds} seed(s), temp {args.temperature}")
+
     for task in args.tasks:
         bench = load_benchmark(task, n_coeffs=N_COEFFS)
         print(f"\n== {task} (ceiling {bench.bayes_accuracy:.4f}) ==")
         for condition in args.conditions:
-            res = run_pipeline(
-                bench, args.model_id, condition,
-                region=args.region,
-                max_tool_calls=args.max_tool_calls,
-            )
-            results.append(res)
-            out.write_text(
-                json.dumps([r.to_dict() for r in results], indent=1)
-            )
-            if res.valid:
-                verdict = f" critic={res.critic_verdict}" if res.critic_verdict else ""
-                print(f"{condition:<16} acc {res.test_accuracy:.4f}  "
-                      f"regret {res.regret:+.4f}{verdict}  "
-                      f"tools {res.tool_calls}")
-            else:
-                print(f"{condition:<16} FAILED [{res.error}]")
+            for seed in range(args.seeds):
+                res = run_pipeline(
+                    bench, args.model_id, condition,
+                    region=args.region,
+                    max_tool_calls=args.max_tool_calls,
+                    seed=seed,
+                    temperature=args.temperature,
+                )
+                results.append(res)
+                out.write_text(
+                    json.dumps([r.to_dict() for r in results], indent=1)
+                )
+                if res.valid:
+                    verdict = (f" critic={res.critic_verdict}"
+                               if res.critic_verdict else "")
+                    print(f"{condition:<16} s{seed} acc {res.test_accuracy:.4f}  "
+                          f"regret {res.regret:+.4f}{verdict}  "
+                          f"tools {res.tool_calls}")
+                else:
+                    print(f"{condition:<16} s{seed} FAILED [{res.error}]")
 
     print(f"\nresults -> {out}")
 

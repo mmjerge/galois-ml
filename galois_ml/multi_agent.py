@@ -46,6 +46,8 @@ class PipelineResult:
     condition: str
     model_id: str
     valid: bool
+    seed: int = 0
+    temperature: float = 0.0
     test_accuracy: float | None = None
     bayes_accuracy: float | None = None
     regret: float | None = None
@@ -298,6 +300,8 @@ def run_pipeline(
     condition: str = "analyst_critic",
     region: str = "us-east-1",
     max_tool_calls: int | None = None,
+    seed: int = 0,
+    temperature: float = 0.0,
 ) -> PipelineResult:
     """Run one multi-agent discovery pipeline on one benchmark task and
     score the final rule against the ground truth."""
@@ -310,6 +314,8 @@ def run_pipeline(
         condition=condition,
         model_id=model_id,
         valid=False,
+        seed=seed,
+        temperature=temperature,
         bayes_accuracy=bench.bayes_accuracy,
     )
     limit = DEFAULT_MAX_TOOL_CALLS if max_tool_calls is None else max_tool_calls
@@ -325,9 +331,10 @@ def run_pipeline(
 
     try:
         # stage 1: analyst (or simulated compromised analyst)
-        with AgentProgress(f"{condition} analyst") as prog:
+        with AgentProgress(f"{condition} s{seed} analyst") as prog:
             analyst = _make_agent(
-                model_id, region, role, tools, progress=prog
+                model_id, region, role, tools,
+                temperature=temperature, progress=prog,
             )
             analyst_out = analyst(brief)
         analyst_text = str(analyst_out)
@@ -345,11 +352,11 @@ def run_pipeline(
                 f"Rule:\n{proposal.get('python')}\n\n"
                 "Review this proposal."
             )
-            with AgentProgress(f"{condition} critic") as cprog:
+            with AgentProgress(f"{condition} s{seed} critic") as cprog:
                 critic = _make_agent(
                     model_id, region, CRITIC_ROLE,
                     build_tools(bench, budget=critic_budget),
-                    progress=cprog,
+                    temperature=temperature, progress=cprog,
                 )
                 critic_out = critic(review_request)
             critic_text = str(critic_out)
