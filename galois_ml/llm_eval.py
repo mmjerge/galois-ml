@@ -460,14 +460,31 @@ class BedrockModel:
         self.model_id = model_id
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self._temperature_rejected = False
 
     def __call__(self, prompt: str) -> str:
-        response = self.client.converse(
-            modelId=self.model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={
-                "maxTokens": self.max_tokens,
-                "temperature": self.temperature,
-            },
-        )
+        config = {"maxTokens": self.max_tokens}
+        if self.temperature is not None and not self._temperature_rejected:
+            config["temperature"] = self.temperature
+        try:
+            response = self.client.converse(
+                modelId=self.model_id,
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig=config,
+            )
+        except Exception as exc:
+            # The newest model generations reject `temperature` outright
+            # ("temperature is deprecated for this model"). Retry without
+            # it and remember, so a cross-model sweep does not need a
+            # hand-maintained list of which models accept what.
+            if "temperature" in str(exc) and not self._temperature_rejected:
+                self._temperature_rejected = True
+                config.pop("temperature", None)
+                response = self.client.converse(
+                    modelId=self.model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig=config,
+                )
+            else:
+                raise
         return response["output"]["message"]["content"][0]["text"]

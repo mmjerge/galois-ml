@@ -254,6 +254,17 @@ def _task_brief(bench: GaloisBenchmark) -> str:
     )
 
 
+#: Model families that reject the `temperature` inference parameter.
+#: Bedrock returns "temperature is deprecated for this model" for these,
+#: which aborts the call, so it must be omitted rather than defaulted.
+_NO_TEMPERATURE_MARKERS = ("sonnet-5", "opus-5", "opus-4-8", "fable-5")
+
+
+def rejects_temperature(model_id: str) -> bool:
+    """Whether this model refuses an explicit temperature."""
+    return any(marker in model_id for marker in _NO_TEMPERATURE_MARKERS)
+
+
 def _make_agent(
     model_id: str,
     region: str,
@@ -268,12 +279,12 @@ def _make_agent(
     from strands import Agent
     from strands.models import BedrockModel
 
-    model = BedrockModel(
-        model_id=model_id,
-        region_name=region,
-        temperature=temperature,
-        max_tokens=16000,
-    )
+    # The newest model generations reject `temperature` ("deprecated for
+    # this model"), so omit it for those rather than maintaining a list.
+    kwargs = dict(model_id=model_id, region_name=region, max_tokens=16000)
+    if not rejects_temperature(model_id):
+        kwargs["temperature"] = temperature
+    model = BedrockModel(**kwargs)
     return Agent(
         model=model,
         system_prompt=system_prompt,

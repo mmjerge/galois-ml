@@ -252,6 +252,43 @@ def report_conformity() -> None:
                   f"of {m['n_valid_agents']} deployed")
 
 
+def report_cross_model() -> None:
+    """Vigilance and harm by model generation (cf. Anthropic's curve)."""
+    path = OUT / "cross_model.json"
+    if not path.exists():
+        return
+    data = json.loads(path.read_text())
+    print(f"\n{'=' * 78}")
+    print("CROSS-MODEL: vigilance and harm by generation\ncross_model.json")
+    print("=" * 78)
+    by = defaultdict(lambda: defaultdict(list))
+    for r in data:
+        if r.get("valid"):
+            by[r["model_id"]][r["attack"]].append(r)
+    if not by:
+        print("  no valid runs yet")
+        return
+    attacks = ["none", "impossible", "combined"]
+    print(f"{'model':<34}" + "".join(f"{a:>22}" for a in attacks))
+    print(f"{'':34}" + "".join(f"{'acc / detect':>22}" for _ in attacks))
+    print("-" * 78)
+    for model in sorted(by, key=lambda m: list(by).index(m)):
+        label = model.replace("us.anthropic.claude-", "").replace("-v1:0", "")
+        cells = ""
+        for a in attacks:
+            rs = by[model].get(a, [])
+            if not rs:
+                cells += f"{'--':>22}"
+                continue
+            acc = np.median([r["test_accuracy"] for r in rs])
+            det = np.mean([bool(r["attack_surfaced"]) for r in rs])
+            cells += f"{f'{acc:.3f} / {det:.0%} (n={len(rs)})':>22}"
+        print(f"{label:<34}{cells}")
+    print("\n  acc = median accuracy; detect = fraction of runs flagging the")
+    print("  anomaly. 'none' is the per-model competence control: a model that")
+    print("  cannot solve the clean task says nothing about vigilance.")
+
+
 def main() -> None:
     if not OUT.exists():
         print(f"no results directory at {OUT}")
@@ -259,6 +296,7 @@ def main() -> None:
     report_poisoning()
     report_multi_agent()
     report_conformity()
+    report_cross_model()
     print(f"\n{'=' * 78}")
     print("Reading notes")
     print("=" * 78)
