@@ -138,3 +138,40 @@ def test_analyze_runs_all_correct_does_not_crash():
     assert m["correlation_ratio"] is None
     assert m["majority_vote_accuracy"] == 1.0
     assert m["effective_independent_agents"] == pytest.approx(1.0)
+
+
+def test_decompose_against_bayes_separates_ambiguity_from_blind_spots():
+    """Errors on items the Bayes rule also misses are irreducible task
+    ambiguity; errors on items it gets right are avoidable. The
+    decomposition must attribute each correctly."""
+    from galois_ml.conformity import decompose_against_bayes
+    from galois_ml.criteria import ChebotarevBayesClassifier
+
+    bench = load_benchmark(
+        "sextic", n_train=200, n_test=200, n_coeffs=200, bayes_samples=8000
+    )
+    bayes_wrong = (
+        ChebotarevBayesClassifier(bench.task, 200).predict(bench.X_test)
+        != bench.y_test
+    )
+    hard = np.where(bayes_wrong)[0]
+    easy = np.where(~bayes_wrong)[0]
+    assert len(hard) > 2 and len(easy) > 2, "need both kinds of item"
+
+    # agents failing ONLY where Bayes fails: all error is irreducible,
+    # and there is no avoidable error left to correlate
+    only_hard = np.zeros(len(bench.y_test), dtype=bool)
+    only_hard[hard[:3]] = True
+    d = decompose_against_bayes([only_hard, only_hard.copy()], bench)
+    assert d["mean_frac_errors_on_bayes_hard_items"] == pytest.approx(1.0)
+    assert d["mean_avoidable_error_rate"] == 0.0
+
+    # agents failing ONLY where Bayes succeeds: all error is avoidable
+    only_easy = np.zeros(len(bench.y_test), dtype=bool)
+    only_easy[easy[:3]] = True
+    d2 = decompose_against_bayes([only_easy, only_easy.copy()], bench)
+    assert d2["mean_frac_errors_on_bayes_hard_items"] == pytest.approx(0.0)
+    assert d2["mean_avoidable_error_rate"] > 0
+    # identical avoidable error sets are maximally correlated
+    assert d2["avoidable_observed_jaccard"] == pytest.approx(1.0)
+    assert d2["avoidable_correlation_ratio"] > 5

@@ -183,6 +183,54 @@ def effective_independent_count(
     return float(ks[-1])
 
 
+def decompose_against_bayes(
+    masks: list[np.ndarray], bench: GaloisBenchmark
+) -> dict:
+    """Separate irreducible task ambiguity from genuine correlated error.
+
+    Agent error overlap has two sources, and conflating them overstates
+    conformity. On a task whose ceiling is below 1.0, some test items are
+    genuinely ambiguous: the Bayes-optimal rule itself misclassifies
+    them, and since the optimal decision boundary is unique, ANY
+    competent agent fails on approximately that same set. That overlap is
+    a property of the task, not of the models.
+
+    The remaining overlap -- on items the Bayes rule gets right -- is
+    avoidable error, and correlation there reflects shared model blind
+    spots rather than information-theoretic limits.
+
+    Returns the split, plus the correlation ratio restricted to avoidable
+    errors, which is the conformity-relevant figure.
+    """
+    from galois_ml.criteria import ChebotarevBayesClassifier
+
+    n_coeffs = bench.X_test.shape[1]
+    bayes = ChebotarevBayesClassifier(bench.task, n_coeffs)
+    bayes_pred = bayes.predict(bench.X_test)
+    bayes_wrong = bayes_pred != bench.y_test
+
+    shares, avoidable_masks = [], []
+    for m in masks:
+        n_err = int(m.sum())
+        if n_err:
+            shares.append(float(np.logical_and(m, bayes_wrong).sum()) / n_err)
+        avoidable_masks.append(np.logical_and(m, ~bayes_wrong))
+
+    avoidable = pairwise_error_overlap(avoidable_masks)
+    return {
+        "bayes_error_rate": float(bayes_wrong.mean()),
+        "mean_frac_errors_on_bayes_hard_items": (
+            float(np.mean(shares)) if shares else None
+        ),
+        "mean_avoidable_error_rate": float(
+            np.mean([m.mean() for m in avoidable_masks])
+        ),
+        "avoidable_observed_jaccard": avoidable["observed_jaccard"],
+        "avoidable_independent_jaccard": avoidable["independent_jaccard"],
+        "avoidable_correlation_ratio": avoidable["correlation_ratio"],
+    }
+
+
 def analyze_runs(
     runs: list[AgentRun], bench: GaloisBenchmark, predictions: list[np.ndarray]
 ) -> dict:
@@ -220,6 +268,8 @@ def analyze_runs(
         "distinct_conjectures": len({
             (r.conjecture or "").strip().lower()[:200] for r, _ in valid
         }),
+        # separate irreducible task ambiguity from shared model blind spots
+        **decompose_against_bayes(masks, bench),
     }
     gain_if_ind = metrics["ensemble_gain_if_independent"]
     metrics["realized_gain_fraction"] = (

@@ -250,6 +250,18 @@ def report_conformity() -> None:
             print(f"     effective independent agents: "
                   f"{m['effective_independent_agents']:.2f} "
                   f"of {m['n_valid_agents']} deployed")
+            # separate irreducible task ambiguity from shared blind spots
+            if m.get("bayes_error_rate") is not None:
+                frac = m.get("mean_frac_errors_on_bayes_hard_items")
+                acr = m.get("avoidable_correlation_ratio")
+                print(f"     -- decomposition vs the Bayes rule --")
+                print(f"        Bayes own error rate: {m['bayes_error_rate']:.4f}"
+                      f"   agent errors on Bayes-hard items: "
+                      + (f"{frac:.1%}" if frac is not None else "n/a"))
+                print(f"        avoidable error rate: "
+                      f"{m['mean_avoidable_error_rate']:.4f}"
+                      f"   correlation on AVOIDABLE errors: "
+                      + (f"{acr:.1f}x" if acr is not None else "undefined"))
 
 
 def report_cross_model() -> None:
