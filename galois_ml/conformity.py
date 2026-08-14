@@ -106,10 +106,15 @@ def pairwise_error_overlap(masks: list[np.ndarray]) -> dict:
                 "correlation_ratio": None, "n_pairs": 0}
     obs_mean = float(np.mean(observed))
     exp_mean = float(np.mean(expected))
+    # exp_mean == 0 happens when at least one agent in every pair made no
+    # errors at all (nothing to overlap). obs_mean is then also 0, so the
+    # ratio is a genuine 0/0: report it as None (undefined) rather than
+    # silently coercing to a number, and let callers say so explicitly.
+    correlation_ratio = (obs_mean / exp_mean) if exp_mean > 0 else None
     return {
         "observed_jaccard": obs_mean,
         "independent_jaccard": exp_mean,
-        "correlation_ratio": (obs_mean / exp_mean) if exp_mean > 0 else None,
+        "correlation_ratio": correlation_ratio,
         "n_pairs": len(observed),
     }
 

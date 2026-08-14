@@ -109,3 +109,32 @@ def test_analyze_runs_handles_too_few_valid():
     runs = [AgentRun(seed=0, valid=False, error="boom")]
     m = analyze_runs(runs, bench, [np.full(20, -1)])
     assert "note" in m
+
+
+def test_pairwise_overlap_handles_all_agents_perfect():
+    """Regression test: an EC2 sweep crashed here. When every agent gets
+    every item right there is nothing to overlap, and correlation_ratio
+    is a genuine 0/0 -- it must come back as None, not raise."""
+    masks = [np.zeros(50, dtype=bool) for _ in range(5)]
+    out = pairwise_error_overlap(masks)
+    assert out["observed_jaccard"] == 0.0
+    assert out["independent_jaccard"] == 0.0
+    assert out["correlation_ratio"] is None
+
+
+def test_analyze_runs_all_correct_does_not_crash():
+    bench = load_benchmark(
+        "quartic", n_train=60, n_test=40, n_coeffs=100, bayes_samples=4000
+    )
+    n = len(bench.y_test)
+    runs, preds = [], []
+    for i in range(5):
+        runs.append(AgentRun(
+            seed=i, valid=True, accuracy=1.0,
+            error_mask=[False] * n, conjecture=f"rule {i}",
+        ))
+        preds.append(bench.y_test.copy())
+    m = analyze_runs(runs, bench, preds)
+    assert m["correlation_ratio"] is None
+    assert m["majority_vote_accuracy"] == 1.0
+    assert m["effective_independent_agents"] == pytest.approx(1.0)

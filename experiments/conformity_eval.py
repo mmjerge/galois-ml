@@ -81,23 +81,29 @@ def main() -> None:
         if "note" in m:
             print(f"  {m['note']}")
             continue
-        print(f"\n  individual accuracy: {m['individual_accuracy_mean']:.4f} "
-              f"+/- {m['individual_accuracy_std']:.4f} "
-              f"(min {m['individual_accuracy_min']:.4f}, "
-              f"max {m['individual_accuracy_max']:.4f})")
+        def fmt(x, spec=".4f", na="n/a"):
+            return na if x is None else format(x, spec)
+
+        print(f"\n  individual accuracy: {fmt(m['individual_accuracy_mean'])} "
+              f"+/- {fmt(m['individual_accuracy_std'])} "
+              f"(min {fmt(m['individual_accuracy_min'])}, "
+              f"max {fmt(m['individual_accuracy_max'])})")
         print(f"  distinct conjectures: {m['distinct_conjectures']} "
               f"of {m['n_valid_agents']}")
-        print(f"  error overlap (Jaccard): {m['observed_jaccard']:.3f} "
-              f"observed vs {m['independent_jaccard']:.3f} if independent"
-              f"  -> correlation ratio {m['correlation_ratio']:.2f}x")
-        print(f"  majority vote: {m['majority_vote_accuracy']:.4f} "
+        print(f"  error overlap (Jaccard): {fmt(m['observed_jaccard'], '.3f')} "
+              f"observed vs {fmt(m['independent_jaccard'], '.3f')} if independent"
+              f"  -> correlation ratio "
+              + (f"{fmt(m['correlation_ratio'], '.2f')}x"
+                 if m['correlation_ratio'] is not None
+                 else "n/a (no errors to compare -- all agents perfect)"))
+        print(f"  majority vote: {fmt(m['majority_vote_accuracy'])} "
               f"(independent ensemble would give "
-              f"{m['independent_ensemble_accuracy']:.4f})")
+              f"{fmt(m['independent_ensemble_accuracy'])})")
         rg = m["realized_gain_fraction"]
         print(f"  realized ensembling gain: "
               + (f"{rg:.1%} of theoretical" if rg is not None else "n/a"))
         print(f"  effective independent agents: "
-              f"{m['effective_independent_agents']:.2f} "
+              f"{fmt(m['effective_independent_agents'], '.2f')} "
               f"(deployed {m['n_valid_agents']})")
 
     print(f"\nresults -> {out}")
