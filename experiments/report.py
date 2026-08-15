@@ -143,11 +143,15 @@ def report_outcome_taxonomy(data: list[dict], label: str) -> None:
 
 
 def report_poisoning() -> None:
-    for path in sorted(OUT.glob("tool_poisoning_*_harm.json")) + \
-                sorted(OUT.glob("tool_poisoning_*_redundancy.json")):
+    # include suffixed reruns (_harm_v2 etc), newest last
+    paths = sorted(OUT.glob("tool_poisoning_*_harm*.json")) + \
+            sorted(OUT.glob("tool_poisoning_*_redundancy*.json"))
+    for path in paths:
         data = json.loads(path.read_text())
         regime = "attack HARM (theory withheld)" if "_harm" in path.name \
             else "channel REDUNDANCY (theory present)"
+        if "_v2" in path.name:
+            regime += " [v2: seeded, headroom tasks]"
         # split by task: pooling tasks with different ceilings would hide
         # task-specific effects and make "solved" incomparable across rows
         tasks = sorted({r["task"] for r in data if r.get("valid")})

@@ -47,8 +47,12 @@ N_COEFFS = 1000
 
 #: Ordered oldest to newest, matching the generations in the Anthropic
 #: report so the comparison is like-for-like where possible.
+#: NOTE: claude-sonnet-4-20250514 is excluded. Bedrock now refuses it with
+#: "This Model is marked by provider as Legacy and you have not been
+#: actively using the model in the last 30 days", so every run against it
+#: fails and only wastes wall time. That costs us the oldest baseline
+#: point, which is worth stating when reporting the generational trend.
 DEFAULT_MODELS = [
-    "us.anthropic.claude-sonnet-4-20250514-v1:0",
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "us.anthropic.claude-sonnet-4-6",
     "us.anthropic.claude-opus-4-6-v1",
