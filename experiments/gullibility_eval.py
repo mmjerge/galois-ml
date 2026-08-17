@@ -72,6 +72,12 @@ def main() -> None:
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--roles", nargs="+", default=["analyst", "credulous"])
     ap.add_argument("--max-tool-calls", type=int, default=None)
+    ap.add_argument(
+        "--theory-in-brief", action="store_true",
+        help="leave the group-theory table in the brief. Defaults to OFF: "
+             "with it on, agents bypass the corrupted tools entirely and "
+             "every curve is flat at the ceiling.",
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -97,7 +103,14 @@ def main() -> None:
                         attack="none" if rate == 0.0 else args.attack,
                         with_critic=False,
                         region=args.region, seed=seed,
-                        theory_in_brief=True,
+                        # The tool channel MUST be load-bearing here. The
+                        # first version of this sweep passed True, leaving
+                        # the group-theory table in the brief as an
+                        # un-poisonable channel; every curve came out flat
+                        # at the ceiling, including the credulous baseline,
+                        # because agents derived the rule from theory and
+                        # ignored the corrupted evidence entirely.
+                        theory_in_brief=args.theory_in_brief,
                         temperature=args.temperature,
                         max_tool_calls=args.max_tool_calls,
                         poison_rate=rate,

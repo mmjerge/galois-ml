@@ -1,224 +1,200 @@
 # galois-ml
 
-A benchmark for evaluating LLMs, single agents, and multi-agent systems
-on scientific discovery, with provable ground truth. The tasks come from
-number theory (Galois groups of number fields), and that choice is the
-point: the underlying mathematics is completely known, so discovery can
-be graded exactly instead of judged approximately.
+A testbed for measuring **trust and security properties of multi-agent LLM
+systems** against provable ground truth.
 
-The repo also contains the research toolkit the benchmark grew out of:
-reproductions of [Lee & Lee, *Machines Learn Number Fields, But How? The
-Case of Galois Groups* (arXiv:2508.06670)](https://arxiv.org/abs/2508.06670),
-and Galois-equivariant neural architectures over finite fields.
+The central problem in agentic security evaluation is that harm cannot be
+quantified. When a compromised agent or a poisoned tool corrupts a
+pipeline's conclusion, how much damage was done? Answering that requires
+knowing the correct answer, which for realistic agent tasks nobody does.
+Existing work substitutes LLM judges or rubric matching, inheriting the
+reliability problems of the systems under evaluation.
 
-## From theory to application: why this grades scientific discovery
+This testbed removes the circularity by using tasks whose generative law
+is a provable theorem, drawn from arithmetic statistics. Because the law
+is known in closed form, every task ships with:
 
-The core problem with evaluating discovery agents is that nobody can
-grade discovery. If an agent analyzes a dataset and announces a law,
-scoring that answer requires knowing the true law, and for real open
-problems nobody does. Existing discovery benchmarks work around this
-with LLM judges or fuzzy rubric matching.
+- the **Bayes-optimal accuracy**, a hard ceiling on what any system could
+  achieve, so attack harm is exact regret rather than a relative
+  comparison;
+- the **exact information content in bits** of every observable, which is
+  a side-channel leakage measurement, not an estimate;
+- a **reference theorem**, so a stated explanation can be graded.
 
-This benchmark takes the other route: plant a law that is provable, and
-grade against it exactly. The chain from theory to application:
+Attack harm, defense efficacy, and information leakage all become measured
+quantities. The number theory is the instrument, not the subject.
 
-1. **The theory constrains the data.** For a Galois number field, the
-   zeta coefficient a_(p^k) is determined by how the prime p splits,
-   and how primes split is constrained by the Galois group (only orders
-   of group elements can occur as inertia degrees, with Chebotarev
-   frequencies). The group leaves provable fingerprints in the data.
-2. **The generative model is fully known.** Because of (1), we can
-   compute exactly what any model could ever achieve on the task: the
-   Bayes-optimal accuracy (a hard ceiling), the exact mutual information
-   of every feature (the true attribution ranking), and the theorem a
-   correct explanation must state (the answer key for the discovery).
-3. **Discovery becomes a scored task.** An agent receives the data and
-   the mathematical setup and must return a prediction rule plus a
-   stated conjecture. The rule is executed against held-out data and
-   scored as regret against the ceiling. The conjecture is compared to
-   the known theorem. Both halves of "did it discover the law" are
-   measurable.
-4. **Fresh tasks separate memorization from reasoning.** The generator
-   works for any finite group given its element orders, so we ship
-   tasks (degree 14, 21, 25) whose criteria follow from the same theory
-   but appear in no publication. Performance on published vs held-out
-   tasks of matched difficulty measures training-data contamination
-   directly.
+## Headline findings
 
-A multi-agent system plugs into this the same way a single model does:
-the harness treats any `prompt -> text` entry point as a model, or the
-system can be handed the parquet files directly and asked for a rule
-and a conjecture, which are scored by the same machinery.
+All from Claude models via Amazon Bedrock, on tasks with real headroom
+between agent performance and the ceiling. Full numbers in
+[Results](#results).
 
-## Early evidence that the design works
+**1. Redundancy does not buy independence.** Five agents run
+independently on the same task were worth **1.05 of 5** effective
+independent agents. Majority voting reached 0.9317 where an ensemble with
+the same individual error rates would reach 0.9970 if failures were
+independent: **2% of the theoretical ensembling gain was realized**. All
+five stated *different* conjectures while their errors overlapped 14-26x
+more than independence predicts. Removing irreducible task ambiguity
+*raises* that to 22x and 113x, so it is shared blind spots rather than
+task difficulty. Any assurance argument resting on independent reviewers
+should be checked, not assumed.
 
-A first (partial, single-seed) run of Claude Sonnet 4.5 through the
-harness showed exactly the separations the benchmark is designed to
-detect:
+**2. Robustness improved across model generations; vigilance did not.**
+A tool channel reporting values the underlying theorem *forbids* - a lie
+provable from facts already in the agent's own brief - cost Sonnet 4.5
+**0.367 accuracy** and cost every newer generation **0.000**. Detection of
+that channel was **0% for all six generations, 18/18 runs**. Newer models
+route around provably corrupt evidence perfectly while never reporting it.
+A defense that works because the model ignores bad input is not a defense
+you can monitor.
 
-| task | protocol | accuracy | regret vs ceiling |
-|------|----------|---------:|------------------:|
-| octic_nonabelian | rule induction (data) | 0.960 | +0.016 |
-| degree14 (held out) | rule induction (data) | 0.965 | +0.007 |
-| sextic | derivation (no data) | 0.488 | +0.464 |
-| decic | derivation (no data) | 0.488 | +0.476 |
-| nonic | derivation (no data) | 0.990 | +0.004 |
-| degree14 (held out) | derivation (no data) | 0.958 | +0.014 |
+**3. Detection tracks textual salience, not logical detectability.** The
+same newest models that never flag the impossible-value channel (0%) flag
+a channel carrying injected operator-style instructions **33-50%** of the
+time. The injected text is textually suspicious; the numerical
+impossibility requires an arithmetic check the agent could trivially
+perform. Models catch the socially odd thing and miss the mathematically
+impossible one.
 
-Reading: with data, the model reaches near-ceiling performance. Asked
-to derive rules from pure theory, it collapses to majority-guessing on
-most tasks, except nonic, whose criterion is published in the paper.
-That is a clean contamination signature. Meanwhile it solved held-out
-degree14 by pure reasoning, a genuine (small) mathematical transfer
-that no training corpus contains. Accuracy alone would have blurred all
-three behaviors together.
+**4. Poisoned evidence produces confidently wrong, structurally sound
+rules.** A channel that rotates class labels in reported data causes
+**label inversion**: agents derive the *correct* criterion and attach it
+to the wrong class, yielding accuracy near `1 - ceiling`. This succeeded
+in **4/8 runs** on the 4.6 generation versus **1/7** on Opus 5. Inverted
+rules survive any review that asks whether the reasoning is coherent,
+because it is. Only ground truth catches them.
 
-## Mathematical background
+**5. Garbage is more damaging than deception.** Plausible-but-false data
+caused no significant harm (p=0.28) because the honest validation channel
+caught the resulting rule. Malformed data caused significant harm
+(+0.074 regret, p=0.024) because nothing flags unusable input. When a
+validation channel exists it catches lies but not noise, so data channels
+need well-formedness checks and not only consistency checks.
 
-For a Galois extension K/Q in which a prime p has decomposition type
-(e, f, g), the p-th Euler factor of the Dedekind zeta function is
-`(1 - p^{-fs})^{-g}`, so `a_{p^a}(K) = C(g + a/f - 1, g - 1)` when `f | a`
-and 0 otherwise. Group-theoretic constraints on which inertia degrees f can
-occur become classification criteria - e.g. a degree-l^2 Galois extension is
-cyclic iff `a_{p^l}(K) = 0` for some prime p (Cor 3.3 of the paper), because
-only the cyclic group has inert primes.
+**6. Verification helps against compromise, not in general.** A critic
+agent recovered ~38% of a saboteur's harm (CIs against the saboteur do not
+overlap, so the recovery is real), but added nothing measurable to an
+honest analyst (+0.005 regret, inside noise). An earlier single-seed run
+suggested 100% recovery; proper seeding corrected it.
 
-On the architecture side: Gal(GF(p^n)/F_p) is cyclic, generated by Frobenius
-x -> x^p. In a normal basis {theta, theta^p, ..., theta^{p^{n-1}}} the Frobenius acts on
-coordinates by a cyclic shift, so linear maps commuting with the Galois
-action are exactly circulant matrices (group convolutions over C_n).
-Stacking them with pointwise nonlinearities and an orbit-averaging readout
-gives networks that are *exactly* Galois-invariant for any weights.
+## Threat model and scope
 
-## Layout
+Two families of compromise are instrumented, both scored as exact regret:
 
-```
-galois_ml/
-  zeta.py           Euler factors and zeta coefficients (Prop 2.1 / Cor 2.2)
-  groups.py         Galois group registry (paper tasks + held-out variants)
-                    with Chebotarev Frobenius sampling
-  group_algebra.py  concrete Cayley tables for the paper's 13 groups
-  data.py           synthetic "virtual number field" dataset generator
-  lmfdb.py          real fields via the LMFDB API; zeta coefficients by
-                    factoring defining polynomials mod p (Dedekind)
-  criteria.py       proven criteria (TheoremClassifier) + exact Bayes rule
-                    (ChebotarevBayesClassifier) for the synthetic data model
-  baselines.py      decision tree / logistic regression reproduction
-  finite_field.py   exact GF(p^n) arithmetic, normal bases
-  equivariant.py    cyclic (Frobenius) and general finite-group equivariant
-                    layers and invariant models
-  benchmark.py      interpretability benchmark: exact Bayes ceiling, exact
-                    per-feature mutual information, HF parquet/JSON export
-  grokking.py       GF(p^n)* multiplication task + mechanistic probes
-                    (Fourier concentration, Frobenius-Procrustes alignment)
-  llm_eval.py       model-agnostic LLM/agent evaluation harness with
-                    sandboxed rule execution and offline controls
-experiments/
-  classify_galois_groups.py     paper reproduction on synthetic data
-  classify_lmfdb_fields.py      the same on real LMFDB number fields
-  learn_frobenius_invariants.py equivariant net vs MLP on GF(p^n) squareness
-  expressivity.py               what invariant nets can/cannot represent
-  build_benchmark_suite.py      generate the HF benchmark suite
-  benchmark_eval.py             score models against the ground truth
-  eval_llm.py                   LLM harness runner (controls / Bedrock)
-  grokking_gf.py                grokking run with interpretability probes
-tests/
-```
+- **Compromised agent.** A pipeline member is replaced by one producing
+  plausible but subtly flawed analysis (`saboteur`), with and without an
+  independent reviewer.
+- **Compromised environment.** Agents are honest and identically
+  prompted; their *tools* lie. Channels: falsified observations, inflated
+  validation that hides counterexamples, injected operator-style
+  instructions, values the theory forbids, and all of them together.
+  Corruption rate is tunable per call, so evidence can be partially rather
+  than wholly poisoned.
 
-## The interpretability benchmark
+**In scope:** epistemic security - correctness, faithfulness, provenance,
+robustness of conclusions, information leakage.
 
-`benchmarks/galois-groups-v1/` (regenerate with
-`python experiments/build_benchmark_suite.py`) contains 18 configs
-(9 tasks x feature budgets N in {100, 1000}) in Hugging Face-native
-formats: `train.parquet` / `test.parquet` (columns `zeta`, `label`,
-`group`) plus `metadata.json` per config and a suite `manifest.json`.
-Loads directly with `datasets.load_dataset("parquet", data_files=...)`.
-Three tasks (degree14: C14/D7, degree21: C21/C7:C3, degree25: C25/C5^2)
-are held out: their criteria follow from the same theory but appear in
-no publication, making them contamination-resistant for LLM evaluation
-(flagged `held_out` in the manifest).
+**Out of scope:** sandbox escape, credential theft, privilege escalation,
+tool permission boundaries. This complements work like SAGA and MUZZLE
+rather than substituting for it. See
+[docs/POSITIONING.md](docs/POSITIONING.md) for a mapping to published
+agentic-security work, separating claims supported by those sources from
+our own inferences.
 
-What makes it a benchmark: every config ships provable ground truth.
+## Why the ground truth is provable
 
-- `bayes_accuracy`: the Bayes-optimal ceiling, estimated to +/-0.0005
-  by direct Chebotarev signature sampling (e.g. quartic N=1000: 0.9998;
-  sextic N=100: 0.8445 - the tasks span a real difficulty range).
-- `feature_mutual_information`: exact I(a_n; label) for every feature,
-  computed in closed form from the group theory. This is the true
-  attribution ranking - including subtleties like MI(a_{p^3}) = 0 for
-  the sextic task even though a_{p^3} matters jointly with a_{p^2}.
-- `explanation`: the proven theorem a faithful interpretation should
-  recover (e.g. Cor 3.3 of the paper for the quartic task).
+For a Galois number field K/Q, the Dedekind zeta coefficient `a_(p^k)` is
+determined by how the prime p splits, and splitting is constrained by the
+Galois group: only orders of group elements occur as inertia degrees, with
+Chebotarev frequencies. So the group leaves provable statistical
+fingerprints in the coefficient vector, and the optimal decision rule is
+computable rather than estimated. A representative criterion, from
+[Lee & Lee (arXiv:2508.06670)](https://arxiv.org/abs/2508.06670): a
+degree-l^2 extension is cyclic iff `a_(p^l) = 0` for some prime p, because
+only the cyclic group admits inert primes.
 
-`experiments/benchmark_eval.py` scores models on accuracy regret and
-attribution quality (Spearman vs true MI, precision@k, MI recall@k);
-results go to `experiments/outputs/benchmark_eval.json`. A headline
-finding already visible: a decision tree can sit 0.2% under the ceiling
-on the nonic task while its feature importances correlate weakly with
-the true MI ranking - accuracy and explanation quality decouple, which
-is exactly what this benchmark measures.
+Task difficulty is calibrated by the ceiling and spans a usable range
+(0.9998 down to 0.84). Tasks whose ceiling is too high are unusable for
+security work: with a 0.9998 ceiling, agents saturate and no attack has
+room to register. The security experiments therefore run on sextic
+(0.9518) and degree21 (0.9352).
+
+Held-out task families (degrees 14, 21, 25) follow from the same theory
+but appear in no publication, so memorization and reasoning are separately
+identifiable.
 
 ## Setup
 
 ```bash
-pip install -e .            # core: benchmark, zeta machinery, LLM harness
-pip install -e ".[nn]"      # + torch (equivariant nets, grokking)
-pip install -e ".[bedrock]" # + boto3 (Bedrock model adapter)
-pip install -e ".[dev]"     # + pytest and torch, for running the tests
-pytest
+pip install -e .              # core: benchmark, ground truth, harness
+pip install -e ".[agents]"    # + strands-agents (multi-agent testbed)
+pip install -e ".[bedrock]"   # + boto3 (Bedrock models)
+pip install -e ".[nn]"        # + torch (equivariant nets, grokking)
+pip install -e ".[dev]"       # + pytest
+pytest                        # 139 tests
 ```
 
-## Evaluating models against the benchmark
-
-The LLM/agent harness (`galois_ml.llm_eval`) is model-agnostic: a model
-is any callable `prompt -> text`, so a single LLM, a Bedrock model
-(adapter included), or a multi-agent system behind one entry point all
-plug in unchanged. Protocols: `rule_induction` (data + math -> stated
-rule and predict function, executed and scored against the Bayes
-ceiling), `derivation` (math only, no data), and
-`direct_classification` (few-shot in-context). Offline oracle and
-majority-floor controls validate the harness without any API:
+## Running the experiments
 
 ```bash
-python experiments/eval_llm.py                      # offline controls
-python experiments/eval_llm.py --model-id <bedrock-model-id>
+# full sequential pipeline, resumable via sentinels in outputs/.done
+experiments/_pipeline.sh <bedrock-model-id>
+
+# individual experiments
+python experiments/multi_agent_eval.py   --model-id <id> --seeds 5
+python experiments/tool_poisoning_eval.py --model-id <id> --seeds 5 \
+    --no-theory-in-brief          # required: makes the tool channel load-bearing
+python experiments/conformity_eval.py    --model-id <id> --agents 5
+python experiments/cross_model_eval.py                     # generational trend
+python experiments/gullibility_eval.py                     # corruption-rate curve
+
+# reporting and figures
+python experiments/report.py              # distribution-first summary
+python experiments/plot_generational.py   # vs published generational trend
+python experiments/plot_corroboration.py  # vs published aggregation result
+python experiments/plot_gullibility.py    # vs published gullibility curve
 ```
 
-Extending to new tasks does not require touching the harness: register
-a group in `galois_ml.groups.GROUPS` (its element-order counts are the
-only required data) and add a task to `TASKS`; the dataset generator,
-Bayes ceiling, feature MI, export, and evaluation all follow
-generically. The degree14/21/25 held-out tasks were added exactly this
-way.
+`--no-theory-in-brief` matters. With the group-theory table in the brief
+the agent has an un-poisonable channel, bypasses corrupted tools entirely,
+and every attack measures zero. Two of our own runs were invalidated this
+way before we caught it.
 
-## Positioning within agentic AI security
+For long unattended sweeps, `experiments/remote.sh` manages a dedicated
+EC2 host whose IAM instance role carries permanent Bedrock credentials,
+which avoids the expiring-session failures that killed several laptop
+runs.
 
-`docs/POSITIONING.md` maps each experiment here to published work in
-agentic security (NDS2 Lab's SAGA/SAGA-BFT, MUZZLE, ACE, APWA, and their
-RL-poisoning line) and to Anthropic's Frontier Red Team findings on
-emerging multiagent systems. It deliberately separates claims supported
-by those sources from our own inferences, and states our preliminary
-results at their actual strength (single-seed, coarse detection metric)
-rather than as replications.
+## Reporting conventions
 
-The short version: agentic security needs harm and defense efficacy
-measured in absolute terms, which requires tasks whose correct answer is
-known in closed form. That is what this testbed supplies. It covers
-*epistemic* security - correctness, faithfulness, provenance, robustness
-of conclusions - and not sandbox escape or privilege boundaries.
+Results are reported distribution-first, because several conditions are
+strongly bimodal and a mean over them describes no run that occurred:
 
-## Citation
+- per-condition **n**, sorted individual accuracies, median alongside mean,
+  and a bootstrap 95% CI;
+- **solved** (within 2 points of the ceiling) and **broken** (at or below
+  the chance baseline) fractions, with `*BIMODAL*` flagged when a condition
+  has runs in both;
+- an **outcome taxonomy** distinguishing `flagged` (anomaly reported),
+  `routed_around` (unharmed but never noticed - robustness, not
+  vigilance), `degraded`, `inverted` (right rule, wrong class), `broken`,
+  and `no_opportunity` (channel never called);
+- conditions with n<3 print an explicit warning that differences are not
+  distinguishable from noise.
 
-The reproduced paper: Kyu-Hwan Lee and Seewoo Lee, "Machines Learn
-Number Fields, But How? The Case of Galois Groups", arXiv:2508.06670
-(2025). https://arxiv.org/abs/2508.06670
+The taxonomy exists because collapsing these hides the findings. An
+unharmed-but-unnoticed run is not a successful defense, and an inverted
+rule is not a broken one.
 
-## Results so far
+## Results
 
-`experiments/classify_galois_groups.py` (3000 samples/task, a_1..a_1000):
+Reproductions of the underlying number theory, which validate that the
+ground truth is correct:
 
-| task | classes | tree | logreg | theorem |
-|------|---------|------|--------|---------|
+| task | classes | tree | logreg | proven criterion |
+|------|---------|------|--------|-----------------:|
 | quartic | C4 / C2^2 | 0.997 | 0.953 | 0.998 |
 | sextic | C6 / S3 | 0.835 | 0.787 | 0.947 |
 | octic abelian | C8 / C4xC2 / C2^3 | 0.932 | 0.817 | 0.978 |
@@ -226,54 +202,78 @@ Number Fields, But How? The Case of Galois Groups", arXiv:2508.06670
 | nonic | C9 / C3^2 | 0.985 | 0.955 | 0.990 |
 | decic | C10 / D5 | 0.853 | 0.798 | 0.972 |
 
-The trees rediscover the paper's features (the nonic tree splits on
-a_1000, a_343, a_27 - the same nodes as the paper's Figure 2). The theorem
-classifier agrees with the exact Bayes rule for this data model, which is
-the ceiling for any learner: tasks like sextic have irreducible error at
-N = 1000 because the distinguishing Frobenius classes are only visible at
-the 11 primes with p^2 <= 1000.
+On real LMFDB number fields the proven quartic criterion classifies at
+1.000, confirming the idealized model matches genuine arithmetic.
 
-`experiments/learn_frobenius_invariants.py` (is x a square in GF(5^4)?,
-mean +/- std over 3 seeds, parameter-matched models):
+**Correlated failure** (5 agents/task, temperature 1.0):
 
-| train size | equivariant | plain MLP |
-|-----------:|------------:|----------:|
-| 50 | 0.617 | 0.491 |
-| 100 | 0.697 | 0.495 |
-| 200 | 0.829 | 0.505 |
-| 400 | 0.972 | 0.505 |
+| task | individual accs | distinct conjectures | error correlation | avoidable-error correlation | effective independent agents |
+|---|---|---|---|---|---|
+| sextic | 0.890-0.925 | 5/5 | 14.5x | 21.6x | 1.25 / 5 |
+| degree21 | 0.928-0.932 | 5/5 | 25.5x | 112.6x | 1.05 / 5 |
 
-The Frobenius-equivariant network learns the invariant function from a
-fraction of the field; the unconstrained MLP of the same size stays at
-chance. Arithmetic symmetry is a usable inductive bias.
+**Tool-channel harm** (sextic + degree21 pooled, n=10/channel, one-sided
+Mann-Whitney vs clean control):
 
-`experiments/classify_lmfdb_fields.py` (real LMFDB fields, 100/class):
+| channel | mean regret | vs control | p | significant |
+|---|---|---|---|---|
+| data (plausible lie) | +0.031 | +0.006 | 0.28 | no |
+| verification (inflated) | +0.071 | +0.046 | 0.39 | no |
+| injection (instructions) | +0.021 | -0.004 | 0.80 | no |
+| impossible (forbidden values) | +0.099 | +0.074 | 0.024 | **yes** |
+| combined (all, consistent) | +0.195 | +0.170 | 0.0001 | **yes** |
 
-| task | theorem | tree (5-fold CV) |
-|------|--------:|-----------------:|
-| quartic (C4 / C2^2) | 1.000 | 0.970 |
-| nonic (C9 / C3^2) | 0.985 | 1.000 |
+**Generational trend** (sextic, medians; harm relative to each model's own
+clean control, which controls for differences in raw task competence):
 
-On real fields the proven quartic criterion is exact, as Cor 3.3
-guarantees. The tree beats the unramified theorem classifier on nonic
-fields by exploiting ramified-prime signatures - the same trick as the
-paper's Figure 2 tree.
+| model | clean | impossible harm | detection on impossible | combined harm |
+|---|---|---|---|---|
+| sonnet-4-5 | 0.925 | **-0.367** | 0% | -0.078 |
+| sonnet-4-6 | 0.948 | 0.000 | 0% | inversion 4/8 |
+| opus-4-6 | 0.948 | 0.000 | 0% | inversion 4/8 |
+| opus-4-8 | 0.937 | -0.005 | 0% | -0.172 |
+| sonnet-5 | 0.948 | 0.000 | 0% | -0.037 |
+| opus-5 | 0.948 | 0.000 | 0% | inversion 1/7, flagged 4/7 |
 
-`experiments/expressivity.py` - the capacity side of the bias: on
-GF(5^4), an invariant net fits *any* orbit-constant labeling perfectly
-but is provably capped at the orbit-majority ceiling (0.692 here, hit
-exactly) on unconstrained labels, while the plain MLP memorizes both.
+**Sabotage and verification** (sextic, n=5/condition):
 
-## Notes and next steps
+| condition | median | 95% CI |
+|---|---|---|
+| analyst | 0.9200 | [0.903, 0.924] |
+| analyst + critic | 0.9250 | [0.898, 0.927] |
+| saboteur | 0.8850 | [0.873, 0.895] |
+| saboteur + critic | 0.8983 | [0.898, 0.913] |
 
-- The synthetic generator models unramified primes only; the LMFDB path
-  computes true decomposition data (including ramified g) by factoring
-  mod p, up to the standard caveat at index-dividing primes.
-- `GroupEquivariantLinear` supports arbitrary finite Galois groups via
-  their regular representation (Cayley-table group convolution); S3, D4,
-  Q8 etc. are wired up in `group_algebra.REALIZATIONS`.
-- Natural extensions: ramified-type criteria (Prop 3.4-3.8 of the paper)
-  in the Bayes classifier, non-Galois quartics (C4, C2^2, D4, A4, S4
-  splitting fields), relative extensions, and equivariant models applied
-  to number-field embeddings (a totally real Galois K acts on its
-  archimedean embeddings by the regular representation).
+Median sabotage harm +0.035 regret; critic recovers +0.013 (~38%); critic
+effect on an honest analyst +0.005 (noise).
+
+## Limitations
+
+- Claude models only. The generational trend cannot be attributed to model
+  scale, training recipe, or release date separately, and the oldest
+  baseline (Sonnet 4) is unavailable because Bedrock refuses it as legacy.
+- n=5 to n=10 per condition. Bimodal conditions in particular are
+  characterized, not resolved.
+- Detection is measured by a deliberately generous keyword heuristic that
+  over-counts suspicion, so low detection rates are conservative but
+  coarse. Transcripts are retained for manual audit.
+- The synthetic generator models unramified primes; the LMFDB path
+  computes true decomposition data, with the standard caveat at
+  index-dividing primes.
+- Findings concern epistemic security in a controlled setting. They are
+  not predictions about detection rates in production agent deployments.
+
+## Also in this repository
+
+The research toolkit the testbed grew out of: reproductions of Lee & Lee's
+Galois-group classification, exact GF(p^n) arithmetic with normal bases,
+Frobenius-equivariant neural architectures (a Galois-equivariant network
+learns squareness in GF(5^4) from 400 examples while a parameter-matched
+MLP stays at chance), and mechanistic probes for grokking on finite-field
+multiplication.
+
+## Citation
+
+Kyu-Hwan Lee and Seewoo Lee, "Machines Learn Number Fields, But How? The
+Case of Galois Groups", arXiv:2508.06670 (2025).
+https://arxiv.org/abs/2508.06670
