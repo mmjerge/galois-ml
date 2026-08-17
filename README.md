@@ -150,12 +150,24 @@ python experiments/conformity_eval.py    --model-id <id> --agents 5
 python experiments/cross_model_eval.py                     # generational trend
 python experiments/gullibility_eval.py                     # corruption-rate curve
 
-# reporting and figures
-python experiments/report.py              # distribution-first summary
-python experiments/plot_generational.py   # vs published generational trend
-python experiments/plot_corroboration.py  # vs published aggregation result
+# reporting
+python experiments/report.py              # canonical output: tables
 python experiments/plot_gullibility.py    # vs published gullibility curve
 ```
+
+Results are reported as **tables**, not charts. Two cross-study overlay
+figures were built and withdrawn: they placed a published result beside
+ours in a way that invited point-by-point comparison the data could not
+support (mismatched model alignment on a shared axis, a normalization that
+goes negative under label inversion, and quantities that share a theme but
+not a mechanism). The withdrawn scripts retain the specifics in their
+docstrings. Tables force each number to carry its own model, metric, and
+n, which is what these findings need.
+
+The one cross-study figure retained is the gullibility curve, which is
+legitimately comparable: a shared x-axis (corruption rate), the same
+measured quantity (task accuracy), and explicit naive and oracle baselines
+in both studies.
 
 `--no-theory-in-brief` matters. With the group-theory table in the brief
 the agent has an un-poisonable channel, bypasses corrupted tools entirely,
