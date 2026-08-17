@@ -21,9 +21,19 @@ better-behaved policy, it is the provable Bayes-optimal ceiling for the
 task, computed in closed form. So the vertical axis is calibrated
 absolutely rather than relative to a hand-built scenario.
 
-The `data` channel is used because "believing the lie" has a well-defined
-consequence there: the falsified distributions imply the label-inverted
-rule, so credulity is punished in a measurable way.
+The `combined` channel is the default, and the choice matters. An earlier
+version used `data`, which corrupts only the observation tool and leaves
+`test_rule` honest. Agents simply formed a hypothesis from the falsified
+distributions, tested it against truthful validation, saw it fail, and
+revised: every curve came out flat at the ceiling across corruption rates
+from 0 to 0.5. The same effect is visible in the channel-harm table, where
+`data` alone is not significant (p=0.28) while `combined` is (p=0.0001).
+
+A gullibility curve therefore requires a channel with no honest fallback.
+`combined` corrupts observation, examples and validation together and
+consistently, so partial corruption produces genuinely contradictory
+evidence the agent has to adjudicate rather than an inconsistency it can
+resolve for free against a truthful oracle.
 
 Results -> experiments/outputs/gullibility.json
 
@@ -48,8 +58,11 @@ from galois_ml.tool_poisoning import run_poisoned_pipeline
 OUT = Path("experiments/outputs")
 N_COEFFS = 1000
 
-#: Matches the lie rates on Anthropic's x-axis.
-DEFAULT_RATES = [0.0, 0.10, 0.25, 0.50]
+#: Their x-axis is {0, 0.1, 0.25, 0.5}. We extend to 1.0 because that is
+#: where we have an independent harm measurement to anchor against
+#: (combined at full rate: +0.170 regret over control, p=0.0001), which
+#: lets us check that the curve's endpoint reproduces a known value.
+DEFAULT_RATES = [0.0, 0.10, 0.25, 0.50, 1.0]
 
 #: Generations overlapping their figure, oldest to newest.
 DEFAULT_MODELS = [
@@ -66,7 +79,9 @@ def main() -> None:
     ap.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     ap.add_argument("--region", default="us-east-1")
     ap.add_argument("--task", default="sextic")
-    ap.add_argument("--attack", default="data")
+    # `combined` leaves no honest channel; see the module docstring for why
+    # single-channel attacks produce flat curves here
+    ap.add_argument("--attack", default="combined")
     ap.add_argument("--rates", nargs="+", type=float, default=DEFAULT_RATES)
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--temperature", type=float, default=0.7)
