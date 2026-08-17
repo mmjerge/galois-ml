@@ -69,6 +69,18 @@ def load_ours():
     if not path.exists():
         return None
     data = [r for r in json.loads(path.read_text()) if r.get("valid")]
+    # Refuse runs where the group-theory table was left in the brief. With
+    # that un-poisonable channel available agents bypass the corrupted
+    # tools entirely and every curve is flat at the ceiling, which looks
+    # like a finding but measures nothing. Filtering on the recorded flag
+    # rather than on a filename means a stale file cannot quietly produce
+    # a null result.
+    usable = [r for r in data if not r.get("theory_in_brief", True)]
+    if len(usable) < len(data):
+        skipped = len(data) - len(usable)
+        print(f"  ignoring {skipped} run(s) with theory_in_brief=True "
+              f"(un-poisonable channel; see --no-theory-in-brief)")
+    data = usable
     if not data:
         return None
     ceiling = data[0]["bayes_accuracy"]
