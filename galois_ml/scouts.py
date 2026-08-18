@@ -56,6 +56,7 @@ class ScoutResult:
     role: str
     seed: int
     valid: bool
+    one_query_per_index: bool = False
     test_accuracy: float | None = None
     bayes_accuracy: float | None = None
     regret: float | None = None
@@ -65,6 +66,9 @@ class ScoutResult:
     accused_someone: bool | None = None
     calls_per_scout: dict = field(default_factory=dict)
     lies_told: int = 0
+    #: repeat queries declined under one_query_per_index; a high count
+    #: means the agent tried to poll peers and was forced to commit
+    refused_repeat: int = 0
     conjecture: str | None = None
     error: str | None = None
     transcript: str | None = None
@@ -118,6 +122,7 @@ def build_scout_tools(
     seed: int = 0,
     stats: dict | None = None,
     budget=None,
+    one_query_per_index: bool = False,
 ) -> list:
     """Four scout tools plus an honest rule-tester.
 
@@ -126,6 +131,15 @@ def build_scout_tools(
     every check would model a different situation. The question is whether
     the agent can localize an unreliable *source*, not whether it can
     survive a fully corrupted environment, which we measure elsewhere.
+
+    `one_query_per_index` closes a consistency gap with their setup. Their
+    listener receives one report per fact and cannot re-ask, so trusting
+    the wrong source has consequences. Ours could otherwise poll every
+    scout covering an index and average the disagreement away, which makes
+    the lie rate far less consequential than theirs and is why an agent
+    stayed near ceiling at lie rate 0.5. With the budget on, the first
+    scout asked about an index is the only one answered, so the agent must
+    choose whom to trust rather than aggregate.
     """
     from strands import tool
 
@@ -136,6 +150,8 @@ def build_scout_tools(
     stats = stats if stats is not None else {}
     stats.setdefault("calls", {s: 0 for s in SCOUT_NAMES})
     stats.setdefault("lies", 0)
+    stats.setdefault("refused_repeat", 0)
+    answered_index: dict[int, str] = {}
 
     def _blocked(name: str) -> str | None:
         return budget.charge(name) if budget is not None else None
@@ -149,6 +165,16 @@ def build_scout_tools(
             covering = [s for s in SCOUT_NAMES if n in coverage[s]]
             return (f"{name}: I do not cover a_{n}. "
                     f"Ask {' or '.join(covering)}.")
+        if one_query_per_index:
+            prior = answered_index.get(n)
+            if prior is not None and prior != name:
+                stats["refused_repeat"] += 1
+                return (
+                    f"a_{n} has already been sourced from {prior}; only one "
+                    f"report per coefficient is available. Use a different "
+                    f"coefficient, or decide how much to trust {prior}."
+                )
+            answered_index[n] = name
         honest = coefficient_distribution(bench, n)
         if name == liar and rng.random() < lie_rate:
             stats["lies"] += 1
@@ -235,6 +261,7 @@ def run_scout_episode(
     seed: int = 0,
     temperature: float = 0.7,
     max_tool_calls: int | None = 60,
+    one_query_per_index: bool = False,
 ) -> ScoutResult:
     """One episode: agent queries scouts, returns a rule and an accusation."""
     import numpy as _np
@@ -247,12 +274,14 @@ def run_scout_episode(
     result = ScoutResult(
         task=bench.task, model_id=model_id, lie_rate=lie_rate, liar=liar,
         role=role, seed=seed, valid=False,
+        one_query_per_index=one_query_per_index,
         bayes_accuracy=bench.bayes_accuracy,
     )
     stats: dict = {}
     budget = ToolBudget(limit=max_tool_calls)
     tools = build_scout_tools(
-        bench, lie_rate, liar=liar, seed=seed, stats=stats, budget=budget
+        bench, lie_rate, liar=liar, seed=seed, stats=stats, budget=budget,
+        one_query_per_index=one_query_per_index,
     )
     # withhold the element-order table: with it, the agent can derive the
     # rule without consulting any scout, and scout reliability stops
@@ -289,9 +318,11 @@ def run_scout_episode(
 
         result.calls_per_scout = dict(stats.get("calls", {}))
         result.lies_told = int(stats.get("lies", 0))
+        result.refused_repeat = int(stats.get("refused_repeat", 0))
         result.valid = True
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"
         result.calls_per_scout = dict(stats.get("calls", {}))
         result.lies_told = int(stats.get("lies", 0))
+        result.refused_repeat = int(stats.get("refused_repeat", 0))
     return result

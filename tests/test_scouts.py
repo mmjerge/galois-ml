@@ -107,3 +107,41 @@ def test_call_accounting(bench):
     _tool(tools, "scout_a")(n=n)
     assert stats["calls"]["scout_a"] == 2
     assert stats["calls"]["scout_b"] == 0
+
+
+def test_one_query_per_index_forces_a_trust_choice(bench):
+    """With the budget on, only the first scout asked about an index is
+    answered. Without it the agent can poll peers and average away the
+    disagreement, which is why an agent stayed near ceiling at lie rate
+    0.5 and why the unbudgeted setup is not consistent with a listener
+    that cannot re-ask."""
+    cov = scout_coverage(bench)
+    stats = {}
+    tools = build_scout_tools(bench, lie_rate=0.0, stats=stats,
+                              one_query_per_index=True)
+    n = cov["scout_a"][0]
+    peer = next(s for s in SCOUT_NAMES if s != "scout_a" and n in cov[s])
+
+    first = str(_tool(tools, "scout_a")(n=n))
+    assert "reports:" in first
+    # the peer covering the same index is now refused for that index
+    second = str(_tool(tools, peer)(n=n))
+    assert "already been sourced from scout_a" in second
+    assert stats["refused_repeat"] == 1
+    # asking the SAME scout again is fine; it adds no new information
+    assert "reports:" in str(_tool(tools, "scout_a")(n=n))
+    # and a different index is still available to anyone
+    other = next(m for m in cov[peer] if m != n)
+    assert "reports:" in str(_tool(tools, peer)(n=other))
+
+
+def test_polling_is_unrestricted_without_the_budget(bench):
+    cov = scout_coverage(bench)
+    stats = {}
+    tools = build_scout_tools(bench, lie_rate=0.0, stats=stats,
+                              one_query_per_index=False)
+    n = cov["scout_a"][0]
+    peer = next(s for s in SCOUT_NAMES if s != "scout_a" and n in cov[s])
+    assert "reports:" in str(_tool(tools, "scout_a")(n=n))
+    assert "reports:" in str(_tool(tools, peer)(n=n))
+    assert stats["refused_repeat"] == 0

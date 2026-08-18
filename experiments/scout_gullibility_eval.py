@@ -67,10 +67,18 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=4)
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--max-tool-calls", type=int, default=60)
+    ap.add_argument(
+        "--one-query-per-index", action="store_true",
+        help="answer only the first scout asked about each coefficient. "
+             "Closes a consistency gap with the published setup, whose "
+             "listener cannot re-ask: without it an agent can poll every "
+             "covering scout and average the disagreement away.",
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
-    out = OUT / "scout_gullibility.json"
+    suffix = "_budgeted" if args.one_query_per_index else ""
+    out = OUT / f"scout_gullibility{suffix}.json"
     results = []
     bench = load_benchmark(args.task, n_coeffs=N_COEFFS)
     total = (len(args.models) * len(args.rates) * len(args.roles)
@@ -90,6 +98,7 @@ def main() -> None:
                         role=role, region=args.region, seed=seed,
                         temperature=args.temperature,
                         max_tool_calls=args.max_tool_calls,
+                        one_query_per_index=args.one_query_per_index,
                     )
                     results.append(res)
                     out.write_text(
