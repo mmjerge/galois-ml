@@ -60,10 +60,15 @@ def main() -> None:
     # against a 0.9518 ceiling, so the ceiling comparison is meaningful.
     ap.add_argument("--calls-per-decision", type=int, default=30)
     ap.add_argument("--temperature", type=float, default=0.7)
+    ap.add_argument(
+        "--out", default=None,
+        help="results path; set per shard so parallel workers do not "
+             "overwrite one another",
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
-    out = OUT / "sequential_gullibility.json"
+    out = Path(args.out) if args.out else OUT / "sequential_gullibility.json"
     results = []
     bench = load_benchmark(args.task, n_coeffs=N_COEFFS)
     episodes = (len(args.models) * len(args.rates) * len(args.roles)
