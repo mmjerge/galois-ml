@@ -162,8 +162,10 @@ def report_poisoning() -> None:
     # include suffixed reruns (_harm_v2 etc), newest last
     paths = sorted(OUT.glob("tool_poisoning_*_harm*.json")) + \
             sorted(OUT.glob("tool_poisoning_*_redundancy*.json"))
+    pooled: dict[str, list[dict]] = {}
     for path in paths:
         data = json.loads(path.read_text())
+        base_regime = "harm" if "_harm" in path.name else "redundancy"
         regime = "attack HARM (theory withheld)" if "_harm" in path.name \
             else "channel REDUNDANCY (theory present)"
         if "_v2" in path.name:
@@ -176,7 +178,9 @@ def report_poisoning() -> None:
             for r in data:
                 if not r.get("valid") or r["task"] != task:
                     continue
-                key = f"{r['attack']}{'+critic' if r['with_critic'] else ''}"
+                key = (f"{r['attack']}"
+                       f"{'+critic' if r['with_critic'] else ''}"
+                       f"{'+guard' if r.get('guarded') else ''}")
                 rows[key].append(r)
                 ceilings[key] = r["bayes_accuracy"]
             if rows:
@@ -198,6 +202,146 @@ def report_poisoning() -> None:
                 v = det[a]
                 print(f"    {a:<14} {np.mean(v):>5.0%}  ({sum(v)}/{len(v)} runs)")
         report_outcome_taxonomy(data, regime)
+        # key on the base regime, not the annotated one: a v2 rerun is
+        # still the control the guarded runs must be compared against
+        pooled.setdefault(base_regime, []).extend(data)
+
+    # Guarded and unguarded runs are written to different files, so the
+    # matched comparison has to pool within a regime rather than within a
+    # file. Tasks stay separate: their ceilings differ.
+    for base_regime, data in pooled.items():
+        for task in sorted({r["task"] for r in data if r.get("valid")}):
+            report_guard(
+                [r for r in data if r.get("task") == task],
+                label=f"{base_regime} -- {task}",
+            )
+
+
+def _noise_floor(guarded: list[dict], unguarded: list[dict]) -> float | None:
+    """Run-to-run noise floor, from the clean-channel pair.
+
+    On honest tool output the guard is a provable identity: every filter
+    returns its input unchanged (asserted in tests/test_guard.py). So the
+    guarded and unguarded `none` conditions are the SAME experiment,
+    differing only in sampling, and the gap between them is noise by
+    construction rather than an effect. That makes it a free calibration
+    of how large a difference this n can actually resolve, which is worth
+    having when the interesting deltas are also small.
+    """
+    g = [r["regret"] for r in guarded
+         if r["attack"] == "none" and not r.get("with_critic")]
+    u = [r["regret"] for r in unguarded
+         if r["attack"] == "none" and not r.get("with_critic")]
+    if min(len(g), len(u)) < 3:
+        return None
+    return abs(float(np.median(g)) - float(np.median(u)))
+
+
+def _guard_pvalue(guarded: list[dict], unguarded: list[dict]) -> str:
+    """Exact one-sided permutation test: is guarded regret lower?
+
+    Exact enumeration of group assignments replaces Mann-Whitney here on
+    external review: at n=5v5 with heavy ties the asymptotic
+    approximation is unreliable (it reported 0.0107 on the `combined`
+    comparison where exact enumeration gives 4/252 ~ 0.0159). The test
+    statistic is the guarded group's regret sum; the p-value is the
+    fraction of the C(n+m, n) equally-likely assignments with a sum at
+    most the observed one, which handles ties without approximation.
+
+    One-sided in the prespecified direction (guard reduces regret).
+    Findings in the OPPOSITE direction should be reported with the
+    complementary tail and a multiplicity caveat, not with this number.
+    """
+    from itertools import combinations
+    from math import comb as _comb
+
+    g = [r["regret"] for r in guarded]
+    u = [r["regret"] for r in unguarded]
+    if min(len(g), len(u)) < 3:
+        return "n<3"
+    if len(set(g + u)) == 1:
+        return "tied"  # identical values; a p-value is meaningless
+    pooled = g + u
+    if _comb(len(pooled), len(g)) > 200_000:
+        return "n/a"  # enumeration impractical; not expected at pilot n
+    obs = sum(g)
+    le = total = 0
+    for idx in combinations(range(len(pooled)), len(g)):
+        total += 1
+        if sum(pooled[i] for i in idx) <= obs + 1e-12:
+            le += 1
+    return f"{le / total:.4f}"
+
+
+def report_guard(data: list[dict], label: str = "") -> None:
+    """Deterministic guard vs agent detection, and guard harm reduction.
+
+    Guard detection is a property of the guard's checks, not of the
+    model, so it is reported separately from the keyword heuristic used
+    for agent vigilance. Where guarded and unguarded runs of the same
+    channel exist, the regret difference is the guard's measured value.
+    """
+    guarded = [r for r in data if r.get("valid") and r.get("guarded")]
+    if not guarded:
+        return
+    unguarded = [r for r in data if r.get("valid") and not r.get("guarded")]
+    floor = _noise_floor(guarded, unguarded)
+    print(f"\n  deterministic guard (galois_ml.guard)"
+          f"{' -- ' + label if label else ''}:")
+    print(f"    {'channel':<22}{'guard det':>11}{'agent det':>11}"
+          f"{'regret+grd':>12}{'regret-grd':>12}{'delta':>9}{'p':>10}")
+    # Match on with_critic AND guard policy as well as channel: a critic
+    # changes regret on its own, and the three guard policies are three
+    # different interventions (the pilot showed flag and repair have
+    # OPPOSITE effects), so pooling either would produce a mean no arm
+    # exhibited.
+    conditions = sorted({
+        (r["attack"], bool(r.get("with_critic")),
+         r.get("guard_policy") or "flag")
+        for r in guarded
+    })
+    for attack, crit, policy in conditions:
+        g = [r for r in guarded
+             if r["attack"] == attack and bool(r.get("with_critic")) == crit
+             and (r.get("guard_policy") or "flag") == policy]
+        u = [r for r in unguarded
+             if r["attack"] == attack and bool(r.get("with_critic")) == crit]
+        attack = f"{attack}{'+critic' if crit else ''}+{policy}"
+        g_det = np.mean([bool(r.get("guard_detected")) for r in g])
+        a_det = np.mean([bool(r.get("attack_surfaced")) for r in g])
+        g_reg = float(np.median([r["regret"] for r in g]))
+        cells = (f"    {attack:<22}{g_det:>10.0%}{a_det:>11.0%}"
+                 f"{g_reg:>+12.4f}")
+        if u:
+            u_reg = float(np.median([r["regret"] for r in u]))
+            cells += f"{u_reg:>+12.4f}{u_reg - g_reg:>+9.4f}"
+            cells += f"{_guard_pvalue(g, u):>10}"
+            if (floor is not None and attack != "none"
+                    and abs(u_reg - g_reg) <= floor):
+                cells += "  <=noise"
+        else:
+            cells += f"{'-':>12}{'-':>9}{'-':>10}"
+        print(cells + f"   (n={len(g)}v{len(u)})")
+    flags: dict[str, int] = defaultdict(int)
+    for r in guarded:
+        for check, n in (r.get("guard_flags") or {}).items():
+            flags[check] += n
+    if flags:
+        print("    violations by check: " + ", ".join(
+            f"{k} x{v}" for k, v in sorted(flags.items())
+        ))
+    print("    (delta > 0 = guard reduced median regret; p is an exact "
+          "one-sided permutation test, guarded < unguarded; findings in "
+          "the other direction need the complementary tail and a "
+          "multiplicity caveat)")
+    print("    (guard detection is deterministic -- it is a property of "
+          "the checks, not an estimate from these runs)")
+    if floor is not None:
+        print(f"    clean-pair gap {floor:.4f} (guard is an identity on "
+              f"honest output, so this gap is sampling noise). It is a "
+              f"scale diagnostic for reading small deltas, NOT a "
+              f"significance threshold: one null draw cannot calibrate "
+              f"a cutoff.")
 
 
 def report_multi_agent() -> None:

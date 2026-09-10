@@ -112,27 +112,40 @@ stage "1/5 tool poisoning: all channels, theory withheld (attack harm)" \
     --seeds "$SEEDS" --temperature 0.7 --no-theory-in-brief \
     --out-suffix _harm
 
-# 2. The same channels with the theory present, which measures robustness
+# 2. The same conditions as stage 1 but with the deterministic guard
+#    interposed. This is the matched comparison for the constructive
+#    defense, so it runs immediately after its own control: if the sweep
+#    dies later, the guard result is still interpretable. Identical
+#    settings to stage 1 (channels, seeds, temperature, theory withheld)
+#    are what make the regret difference attributable to the guard.
+stage "2/6 tool poisoning: all channels + deterministic guard (defense value)" \
+  "$PYTHON" experiments/tool_poisoning_eval.py --model-id "$MODEL_ID" \
+    --tasks quartic --attacks none data verification injection combined impossible \
+    --seeds "$SEEDS" --temperature 0.7 --no-theory-in-brief \
+    --guarded --guard-policy flag \
+    --out-suffix _harm_guarded
+
+# 3. The same channels with the theory present, which measures robustness
 #    through channel redundancy rather than harm.
-stage "2/5 tool poisoning: all channels, theory present (redundancy)" \
+stage "3/6 tool poisoning: all channels, theory present (redundancy)" \
   "$PYTHON" experiments/tool_poisoning_eval.py --model-id "$MODEL_ID" \
     --tasks quartic --attacks none data verification injection combined impossible \
     --seeds "$SEEDS" --temperature 0.7 \
     --out-suffix _redundancy
 
-# 3. Correlated failure: does redundancy buy independence?
-stage "3/5 conformity: 5 independent agents per task" \
+# 4. Correlated failure: does redundancy buy independence?
+stage "4/6 conformity: 5 independent agents per task" \
   "$PYTHON" experiments/conformity_eval.py --model-id "$MODEL_ID" \
     --tasks quartic sextic --agents 5 --temperature 1.0
 
-# 4. Agent-level compromise and verification value.
-stage "4/5 multi-agent conditions (verification value, sabotage)" \
+# 5. Agent-level compromise and verification value.
+stage "5/6 multi-agent conditions (verification value, sabotage)" \
   "$PYTHON" experiments/multi_agent_eval.py --model-id "$MODEL_ID" \
     --tasks quartic sextic degree21
 
-# 5. Figures and aggregates (no Bedrock needed).
+# 6. Figures and aggregates (no Bedrock needed).
 echo
-echo "== 5/5 figures and summary =="
+echo "== 6/6 figures and summary =="
 "$PYTHON" experiments/plot_results.py
 
 echo

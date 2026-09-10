@@ -93,6 +93,70 @@ multiagent systems" (2026-08-13)
   redundancy (`--no-theory-in-brief`), and the corrected runs are in
   progress.
 
+## 3. The deterministic guard: what is proven and what is measured
+
+`galois_ml/guard.py` is the repository's first *constructive* component
+rather than an instrument, so its claims need the same separation as the
+rest of this note.
+
+### Proven, in the strict sense
+
+- **Attainability.** The Euler-factor formula fixes the set of values
+  `a_(p^k)` can take for any Galois field of a given degree, and
+  multiplicativity extends this to every index. A reported value outside
+  that set is a proof that the channel lies. This is a theorem about the
+  arithmetic, not a property of a model, a prompt, or a sample.
+- **Soundness.** Honest tool output satisfies the theorem and the
+  published grammar, so it is never flagged. Asserted by test across
+  every task, and now also observed in live agent runs.
+- **Determinism.** Guard verdicts are a function of the tool output, so
+  per-channel detection is *computed* (`experiments/guard_matrix.py`),
+  not estimated. There is no sampling error and no n to report.
+
+### Proven only relative to an assumption
+
+- **Schema checks** are complete against out-of-grammar corruption and
+  silent against an attacker who conforms to the grammar. The
+  `verification_stealth` channel exists to keep us from stating the
+  stronger version: it inflates accuracy while emitting exactly one
+  honest production, and it defeats every format check we have.
+- **Recomputation** is provable given trusted local compute and data. If
+  the orchestrator's own compute is compromised, the guarantee is void.
+  This is the standard trusted-computing-base caveat and it is where our
+  claim bottoms out.
+
+### Not proven, and not claimed
+
+Nothing here makes the *agents* trustworthy. The guard bounds what must
+be trusted to a stochastic component and moves the remainder to one whose
+behaviour is provable; agent conduct downstream of the guard remains a
+measured quantity, in exact regret. In particular the guard does not
+prevent an agent from reasoning badly about correctly-reported evidence,
+and under our own restriction it cannot detect the `data` channel at all
+(catching it would require class-distinguishing knowledge, which would
+make the guard an oracle for the task and invalidate the measurement -
+the same failure mode as the `theory_in_brief` redundancy that voided our
+first poisoning runs).
+
+### Relation to the external work above
+
+SAGA-BFT and MUZZLE build architectures and defenses at the boundary we
+declared out of scope (sandboxing, permissions, Byzantine agreement).
+The guard operates at the *epistemic* boundary instead: it does not ask
+whether a tool is authorized, it asks whether what the tool said can be
+true. The two compose - an authorized tool can still report an
+arithmetically impossible value, and no permission system detects that.
+
+Our reading of the Anthropic Frontier Red Team finding is what motivated
+the component. Their conclusion is that models abstractly understand
+that sources have incentives but lack "a disposition to act on that
+knowledge without prompting". Our inference, not their claim: a
+disposition is the wrong place to put a check that is decidable. Where a
+verification step is deterministic, assigning it to a stochastic
+component is a design error rather than a training gap, and our 0%
+detection rate on a channel refutable by one arithmetic comparison is
+evidence for treating it that way.
+
 ## Summary of the claim we are willing to defend
 
 Agentic security research needs harm and defense-efficacy measured in
@@ -103,3 +167,11 @@ failure correlation. It is a controlled instrument for developing
 measurement methodology, in the way small labelled corpora served early
 adversarial-robustness work, and not a substitute for evaluation on
 production agent deployments.
+
+The constructive addition we are willing to defend on top of that: when a
+verification step is decidable, it should be discharged by a bounded
+deterministic component rather than delegated to an agent's judgment, and
+this testbed can demonstrate the difference exactly - proven detection on
+one side, a measured 0% on the other, with harm reduction in units of
+regret against a provable ceiling. What we are not claiming is any
+guarantee about the agents themselves.
