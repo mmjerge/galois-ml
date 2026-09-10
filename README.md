@@ -96,6 +96,88 @@ Two families of compromise are instrumented, both scored as exact regret:
 **In scope:** epistemic security - correctness, faithfulness, provenance,
 robustness of conclusions, information leakage.
 
+## The deterministic guard (constructive defense)
+
+Findings 2 and 3 say agents never flag corruption that is trivially
+checkable. The conclusion is not "train more vigilant agents" but "do not
+delegate a deterministic check to a stochastic component".
+`galois_ml/guard.py` is that check: a small, LLM-free verifier interposed
+between tools and agents, acting as the pipeline's trusted computing base
+(it imports nothing from the agent or attack modules, standard library
+only). Each check carries an explicit guarantee class, because "provable"
+has to mean something specific:
+
+| guarantee | basis | catches | blind to |
+|---|---|---|---|
+| `theorem` | the Euler-factor formula fixes the values `a_n` can take at **unramified** primes for the stated degree (the synthetic generator's model); multiplicativity extends this to every index, and a same-prime check requires one decomposition type per prime per row | values the theory forbids, malformed frequencies, same-prime contradictions | attainable values that are misattributed; ramified-prime values of genuine number fields (out of scope) |
+| `schema` | the honest tools emit a fixed published grammar | appended instructions, injected notices, label/class inconsistency | grammar-conforming forgeries |
+| `recomputation` | validation is deterministic under the harness's controlled execution, so the orchestrator can re-derive it | a compromised validation harness, including one that mimics the honest format | nondeterministic rule code; compromise of the orchestrator's own compute (the real TCB includes the sandbox, data, and callback) |
+
+Detection here is *computed, not sampled*, so it needs no model and no
+credentials:
+
+```bash
+python experiments/guard_matrix.py     # exact per-channel detection matrix
+```
+
+| channel | guard detects | guarantee |
+|---|---|---|
+| none (control) | no (required: soundness) | - |
+| data | **no (by construction)** | - |
+| verification | yes | schema |
+| verification_stealth | yes | recomputation |
+| injection | yes | schema |
+| combined | yes | schema |
+| impossible | yes | theorem |
+
+Identical on every task tested, and honest generator output is never
+flagged. Detection here means detection of the implemented attack
+fixtures, computed exactly - not universal completeness for everything a
+channel could carry. Set against the measured agent rates (0% on
+`impossible`, 18/18 runs, six generations), the gap is the point: the
+check was always cheap, it was just assigned to the wrong kind of
+component.
+
+Two entries deserve emphasis rather than burial:
+
+- **`data` is undetected by design.** A consistent permutation of every
+  class attribution is a possible honest transcript under a relabeling,
+  and no verifier whose knowledge is label-permutation-invariant can
+  flag it without false positives (the restricted proposition in
+  [docs/GUARD_FINDINGS.md](docs/GUARD_FINDINGS.md), which replaces an
+  earlier, broader claim: partial or cross-channel-inconsistent
+  relabelings, and statistical detection, are not excluded).
+  `tests/test_guard.py` asserts the current guard's blindness so it
+  fails loudly if anyone "fixes" it by giving the guard
+  class-distinguishing knowledge, which would make it an oracle for the
+  task.
+- **`verification_stealth` exists to stop us overclaiming.** The stock
+  `verification` attack announces itself with a string the honest tool
+  never emits, so any format check catches it. An attacker who has read
+  the tool source would not make that mistake. Against that adaptive
+  adversary, schema checks are a speed bump and only recomputation holds.
+
+What the guard does **not** establish: nothing here proves the agents
+trustworthy, and detection is not mitigation. In the first agent pilot
+(one model, one task, n=5, warning-only policy), correct deterministic
+detection improved no attacked channel's observed median and produced a
+large regression on the combined attack - agents warned about corrupt
+evidence abandoned the flagged channel for worse heuristics, while
+unguarded agents silently routed around it. Full numbers, exact
+statistics, and the corrections from an external review are in
+[docs/GUARD_FINDINGS.md](docs/GUARD_FINDINGS.md).
+
+```bash
+# guarded conditions, matched to their own unguarded controls
+python experiments/tool_poisoning_eval.py --model-id <id> --seeds 5 \
+    --no-theory-in-brief --guarded --guard-policy flag
+```
+
+`--guard-policy` selects what a violation does to the text the agent sees:
+`flag` annotates it (the agent still weighs the evidence), `block`
+withholds it. Guard verdicts are recorded deterministically and separately
+from agent detection, so the two never get conflated in reporting.
+
 **Out of scope:** sandbox escape, credential theft, privilege escalation,
 tool permission boundaries. This complements work like SAGA and MUZZLE
 rather than substituting for it. See

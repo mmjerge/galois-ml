@@ -67,6 +67,20 @@ def main() -> None:
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--no-theory-in-brief", action="store_true")
     ap.add_argument("--no-critic-runs", action="store_true")
+    ap.add_argument(
+        "--guarded", action="store_true",
+        help="interpose the deterministic tool guard (galois_ml.guard) "
+             "between tools and agents; guard detection is recorded "
+             "separately from agent detection",
+    )
+    ap.add_argument(
+        "--guard-policy", choices=("flag", "block", "repair"),
+        default="flag",
+        help="what a guard violation does to the output the agent sees: "
+             "annotate it (flag), withhold it (block), or substitute the "
+             "trusted recomputation verbatim (repair -- the policy with "
+             "a provable clean-transcript property on detected channels)",
+    )
     ap.add_argument("--out-suffix", default="")
     ap.add_argument(
         "--max-tool-calls", type=int, default=None,
@@ -88,7 +102,9 @@ def main() -> None:
     )
     print(f"{total} runs: {len(args.tasks)} task(s) x {len(args.attacks)} "
           f"attack(s) x {len(critic_modes)} critic mode(s) x {args.seeds} "
-          f"seed(s); theory_in_brief={theory}, temp={args.temperature}")
+          f"seed(s); theory_in_brief={theory}, temp={args.temperature}, "
+          f"guarded={args.guarded}"
+          + (f" (policy={args.guard_policy})" if args.guarded else ""))
 
     for task in args.tasks:
         bench = load_benchmark(task, n_coeffs=N_COEFFS)
@@ -102,14 +118,21 @@ def main() -> None:
                         theory_in_brief=theory,
                         temperature=args.temperature,
                     max_tool_calls=args.max_tool_calls,
+                        guarded=args.guarded,
+                        guard_policy=args.guard_policy,
                     )
                     results.append(res)
                     out.write_text(
                         json.dumps([r.to_dict() for r in results], indent=1)
                     )
-                    label = f"{attack}{'+critic' if with_critic else ''}"
+                    label = (f"{attack}{'+critic' if with_critic else ''}"
+                             f"{'+guard' if args.guarded else ''}")
                     if res.valid:
                         flag = "FLAGGED" if res.attack_surfaced else "undetected"
+                        if args.guarded:
+                            n_guard = sum(res.guard_flags.values())
+                            flag += (f"  guard {n_guard} violation(s)"
+                                     if res.guard_detected else "  guard clean")
                         print(
                             f"{label:<22} s{seed} acc {res.test_accuracy:.4f}  "
                             f"regret {res.regret:+.4f}  {flag}  "
