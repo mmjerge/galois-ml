@@ -9,8 +9,6 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{cite}
 
-% Pending-results markers. Remove all \pending{} before submission.
-\newcommand{\pending}[1]{\textcolor{red!70!black}{[\textbf{PENDING:} #1]}}
 \newcommand{\Q}{\mathbb{Q}}
 \newcommand{\risk}[1]{L_D(#1)}
 \newtheorem{proposition}{Proposition}
@@ -43,11 +41,13 @@ can be \emph{removed}, and whether a pipeline's final artifact should
 be \emph{released}. We show (i)~a deterministic verifier with stated
 guarantee classes detects a decidable corruption class with zero false
 positives, together with a restricted impossibility result for what no
-label-symmetric verifier can detect; (ii)~in a pilot, a correct
-warning-only policy did not reduce harm and produced a large
-regression on a combined attack, whereas silent verbatim repair of
-detected responses restored clean-level performance
-\pending{prespecified randomized replication, 180 runs, in progress};
+label-symmetric verifier can detect; (ii)~with an identical detector, enforcement policy alone spans the
+outcome space: a correct warning-only policy did not reduce harm on
+any channel and produced a large regression on a combined attack
+(median accuracy $0.90\to0.15$, complete separation of runs), whereas
+silent verbatim repair of detected responses restored clean-level
+performance; a prespecified, randomized, interleaved replication is
+registered and under way;
 (iii)~a fresh-holdout release gate bounds released risk relative to a
 trusted fallback against \emph{arbitrary} upstream corruption,
 including the provably undetectable class, with a trusted release
@@ -106,8 +106,9 @@ deployment-distribution equivalence.
 mitigation} (\S\ref{sec:policy}): with an identical deterministic
 detector, three enforcement policies---warn, block, silently
 repair---produce outcomes ranging from a large regression to full
-recovery. A prespecified, randomized, interleaved study tests the
-primary contrast (\S\ref{sec:confirm}). \pending{report outcome}
+recovery. A prespecified, randomized, interleaved study of the primary
+contrast is registered and in progress (\S\ref{sec:confirm}); pilot
+evidence is reported at pilot strength.
 \item \textbf{A layered enforcement implementation with distinct
 guarantee classes} (\S\ref{sec:layers}): evidence checks, conditional
 exact-response restoration, and a fresh-holdout release gate bounding
@@ -438,12 +439,21 @@ Secondaries (Holm): repair vs.\ unguarded; \texttt{impossible} repair
 vs.\ flag; degree-21 replication; released endpoint. Clean channels
 reported descriptively as a drift check.
 
-\pending{Results. Primary $p=\_\_$; degree-21 replication; released
-endpoint; flag-vs-unguarded secondary, which is what ``warnings made
-things worse'' actually requires. Also pending: the \texttt{flag\_routed}
-baseline arm---an actionable warning under the same trust
-assumptions---without which the headline contrast could be read as
-``a minimal warning loses to trusted substitution.''}
+The study is executing at the time of writing; its analysis is fixed
+in code and will be reported as the registered primary and
+secondaries, whatever they show. Two points of discipline apply to
+its interpretation. First, confirming repair $>$ flag does not by
+itself confirm that warnings \emph{harmed} agents; that is the
+flag-vs-unguarded secondary. Second, the warning used in the pilot is
+a bare ``treat this output as untrusted.'' We have implemented an
+actionable variant (\texttt{flag\_routed}: names the failed source and
+the channel that remains independently verified, under identical
+trust assumptions and with no task answers) as the competent-advisory
+baseline. If routed warnings recover performance, the contribution
+sharpens into a distinction between behavior-dependent mitigation and
+the conditional restoration guarantee of Prop.~\ref{prop:repair}; it
+does not weaken the architectural claim, which never rested on
+warnings failing.
 
 \section{Defense-Aware Attacker and the Residual Class}\label{sec:adaptive}
 
@@ -474,9 +484,14 @@ experiment does not separate them. The structural statement we can
 make: under trusted recomputation and complete mediation, a false
 validation result cannot persist at the agent interface; whether that
 \emph{disarms} the attack depends on agent behavior this study did
-not isolate. \pending{anchor factorial: $\{$named, opaque
-labels$\}\times\{$validation available, unavailable$\}$, orientation
-as prespecified mechanism endpoint.}
+not isolate. The separating experiment is a $2\times2$ factorial
+under the same attack---$\{$named groups, opaque per-run
+labels$\}\times\{$validation available, unavailable$\}$, with final
+class orientation as a prespecified mechanism endpoint---which we have
+designed and not yet run. Our reading of the transcripts is that the
+validation anchor is doing most of the work (agents revise after
+failed validations and rarely cite group orders before testing), but
+we hold that as a hypothesis.
 
 The residual accepted-corruption class is larger than this fixture:
 altered attainable frequencies, invented examples, grammar-conforming
@@ -540,9 +555,10 @@ acceptance and fallback frequency alongside risk. \emph{Runtime.}
 Source hashing is not semantic artifact identity; pointwise semantics
 are assumed; resource limits, a protected deployment sink, and signed
 audit storage are the surrounding system's obligations.
-\emph{Empirical.} One model family until the second is added;
-$n=5$ pilot arms until the confirmatory study reports; the anchor
-factorial and the routed-warning baseline are designed but not run.
+\emph{Empirical.} One model family; $n=5$ pilot arms with the
+confirmatory study in progress; the anchor factorial and the
+routed-warning baseline are designed but not run. The pilot's
+\texttt{combined} contrast is the only one we regard as settled.
 
 \section{Conclusion}
 A checker that never misses is not a defense until something binding
