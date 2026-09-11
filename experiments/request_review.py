@@ -346,6 +346,60 @@ QUESTIONS:
    which should be cut? The paper currently risks being a catalogue.
 """
 
+MATH_TASK = """\
+Sixth consultation: act as the mathematically strictest reviewer on the
+SaTML PC. Audit the MATHEMATICS of the paper draft (LaTeX below) and
+its implementation (`gate.py`, `guard.py`). Two things changed since
+your SaTML review, both aimed at the gaps you named:
+
+(A) GATE BOUND. Theorem 1 now uses the minimum of Hoeffding and the
+Maurer-Pontil empirical-Bernstein bound (range 2, unbiased sample
+variance, delta/2 each). Empirically the Bernstein margin is 2.5-3.3x
+tighter and a genuine ~0.92 agent rule certifies against the 0.951
+theorem fallback at m=2000 -- where Hoeffding needed ~66k. Please
+check: (i) the constants and the union-bound bookkeeping in
+eqs. (hoeff)/(bern) and in `paired_margin`/`empirical_bernstein_margin`
+(is the 2K vs 4K inside the logs right given delta/2 per inequality and
+K candidates each?); (ii) that using the holdout's own sample variance
+is licensed (self-normalization) without an additional adaptivity
+penalty; (iii) whether the K-candidate union bound interacts with the
+min over two inequalities correctly; (iv) whether a strictly better
+bound is available for ternary Z in {-1,0,1} -- e.g. Bentkus, or an
+exact bound conditioning on the number of discordant pairs -- and
+whether it is worth it.
+
+(B) JOINT REALIZABILITY. Proposition 3 states that a set of reported
+class marginals of a_{p^k} across powers k of one prime is realizable
+by SOME mixture over residue degrees iff a small LP is feasible
+(implemented in `ToolGuard._jointly_realizable`). Check: (i) the iff
+-- in particular completeness (feasible => realizable) with rendering
+collisions (distinct f mapping to the same rendered value) and the
+rounding tolerance; (ii) that it is genuinely class-agnostic and does
+NOT leak the task (a consistent relabeling must pass -- test included);
+(iii) whether the finite-SAMPLE integer version (counts, not
+frequencies) is materially stronger and worth implementing; (iv)
+whether cross-prime constraints exist under the independence-across-
+primes law that a class-agnostic verifier could also check.
+
+(C) THE THREE PROPOSITIONS AS WRITTEN. Prop 1 (label-permutation
+indistinguishability), Prop 2 (clean-transcript equivalence), Thm 1
+(gate). For each: is the statement precise enough for a security
+venue, are the hypotheses sufficient for the proof sketch given, and
+what is the minimal added hypothesis or rewording that makes it fully
+rigorous? Prop 2 in particular: state it as a coupling/bisimulation
+properly if the current form is loose.
+
+(D) THE COMPOSITE. Write the strongest composite theorem the paper
+should actually state -- mediation M, repair R, gate G, N agents, k
+compromised, channel class C -- with the deterministic clause, the
+statistical clause, and the impossibility boundary as separate
+numbered parts, at the level of rigor you would accept as a reviewer.
+Mark every place the claim is fallback-relative.
+
+(E) Anything in the mathematics that is WRONG. That is the most useful
+thing you can tell me.
+"""
+
 TASK = """\
 You are reviewing a research codebase and its empirical results. Please be
 critical and specific. I would rather hear that a claim is unsupported than
@@ -594,12 +648,19 @@ def _sample_transcript() -> str:
 def build_prompt(extra_source: list[str], mode: str = "review") -> str:
     tasks = {"review": TASK, "guarantees": GUARANTEES_TASK,
              "airtight": AIRTIGHT_TASK, "enforcement": ENFORCEMENT_TASK,
-             "satml": SATML_TASK}
+             "satml": SATML_TASK, "math": MATH_TASK}
     parts = [tasks[mode]]
     if mode == "airtight":
         extra_source = list(extra_source) + ["gate"]
     if mode in ("enforcement", "satml"):
         extra_source = list(extra_source) + ["gate", "release"]
+    if mode == "math":
+        extra_source = list(extra_source) + ["gate"]
+        tex = ROOT / "paper" / "satml" / "main.tex"
+        if tex.exists():
+            parts.append("=" * 78 + "\nPAPER DRAFT (LaTeX source; theorem "
+                         "statements and proofs are what to audit)\n"
+                         + "=" * 78 + "\n" + tex.read_text())
 
     findings = ROOT / "docs" / "GUARD_FINDINGS.md"
     if findings.exists():
@@ -773,7 +834,7 @@ def main() -> None:
     ap.add_argument("--max-tokens", type=int, default=16000)
     ap.add_argument("--mode",
                     choices=("review", "guarantees", "airtight",
-                             "enforcement", "satml"),
+                             "enforcement", "satml", "math"),
                     default="review",
                     help="review: critical code/results review; "
                          "guarantees: design provable security guarantees; "

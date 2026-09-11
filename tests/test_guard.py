@@ -596,3 +596,52 @@ def test_flag_routed_policy_is_actionable_and_information_preserving(bench_sexti
     # honest output untouched, as with every policy
     honest = coefficient_distribution(bench_sextic, 9)
     assert guard.filter_distribution(honest, 9) == honest
+
+
+# -- same-prime joint realizability (Prop. 2) -----------------------------------
+
+def test_joint_realizability_passes_honest_and_relabeled(bench_sextic):
+    """Honest marginals of a_2, a_4, a_8 come from one f-distribution and
+    must pass; a consistent relabeling (data channel) is internally
+    consistent per class and must ALSO pass -- the check is
+    class-agnostic, as the impossibility result requires."""
+    from galois_ml.tool_poisoning import falsified_distribution
+
+    for maker in (
+        lambda n: coefficient_distribution(bench_sextic, n),
+        lambda n: falsified_distribution(bench_sextic, n),
+    ):
+        guard = make_sextic_guard(bench_sextic)
+        for n in (2, 4, 8):
+            out = maker(n)
+            assert guard.filter_distribution(out, n) == out
+        assert not guard.detected
+
+
+def test_joint_realizability_catches_inconsistent_marginals(bench_sextic):
+    """Degree 6: a_2 = 6 iff f=1, which forces a_4 = 21. Reporting
+    Pr(a_2=6)=0.5 but Pr(a_4=21)=0 is individually attainable at each
+    index yet jointly impossible for one sample. No coordinatewise or
+    same-row check sees this; the LP does."""
+    c0, c1 = bench_sextic.class_names
+    guard = make_sextic_guard(bench_sextic)
+    a2 = f"a_2 distribution by class -- {c0}: {{0: 0.500, 6: 0.500}} | {c1}: {{0: 0.500, 6: 0.500}}"
+    assert guard.filter_distribution(a2, 2) == a2          # fine alone
+    a4 = f"a_4 distribution by class -- {c0}: {{0: 0.500, 3: 0.500}} | {c1}: {{0: 0.500, 3: 0.500}}"
+    out = guard.filter_distribution(a4, 4)
+    assert "[GUARD]" in out
+    assert guard.violations[-1].check == "joint_realizability"
+    assert guard.violations[-1].guarantee == THEOREM
+
+
+def test_joint_realizability_is_exact_on_a_feasible_forgery(bench_sextic):
+    """Completeness direction: marginals that ARE realizable by some
+    f-distribution pass even if they match no real class. Here q puts
+    all mass on f=2: a_2=0 always, a_4=3 always."""
+    c0, c1 = bench_sextic.class_names
+    guard = make_sextic_guard(bench_sextic)
+    a2 = f"a_2 distribution by class -- {c0}: {{0: 1.000}} | {c1}: {{0: 1.000}}"
+    a4 = f"a_4 distribution by class -- {c0}: {{3: 1.000}} | {c1}: {{3: 1.000}}"
+    assert guard.filter_distribution(a2, 2) == a2
+    assert guard.filter_distribution(a4, 4) == a4
+    assert not guard.detected

@@ -67,19 +67,78 @@ from typing import Callable
 import numpy as np
 
 
-def hoeffding_margin(m: int, delta: float, n_candidates: int = 1) -> float:
-    """sqrt(2 log(K/delta) / m) for paired losses in [-1, 1].
-
-    Computed as log(K) - log(delta) for numerical stability at small
-    failure budgets, rather than via 1/(delta/K).
-    """
+def _validate(m, delta, n_candidates) -> None:
     if not isinstance(m, (int, np.integer)) or m <= 0:
         raise ValueError("holdout size m must be a positive integer")
     if not (np.isfinite(delta) and 0 < delta < 1):
         raise ValueError("delta must be finite and in (0, 1)")
     if not isinstance(n_candidates, (int, np.integer)) or n_candidates < 1:
         raise ValueError("n_candidates must be a positive integer")
+
+
+def hoeffding_margin(m: int, delta: float, n_candidates: int = 1) -> float:
+    """sqrt(2 log(K/delta) / m) for paired losses in [-1, 1].
+
+    Computed as log(K) - log(delta) for numerical stability at small
+    failure budgets, rather than via 1/(delta/K).
+    """
+    _validate(m, delta, n_candidates)
     return sqrt(2.0 * (log(n_candidates) - log(delta)) / m)
+
+
+def empirical_bernstein_margin(
+    z: np.ndarray, delta: float, n_candidates: int = 1
+) -> float:
+    """Empirical-Bernstein upper-confidence margin (Maurer & Pontil,
+    2009, Thm. 4) for the mean of i.i.d. Z_i in [-1, 1] (range R = 2):
+
+        E[Z] - mean(Z) <= sqrt(2 V_m ln(2K/delta) / m)
+                          + 7 R ln(2K/delta) / (3 (m - 1))
+
+    with probability >= 1 - delta/K, where V_m is the unbiased sample
+    variance. Paired 0-1 loss differences are ternary and mostly ZERO
+    (candidate and fallback agree on most rows), so V_m is small and
+    this margin is far below Hoeffding's range-only sqrt(2 ln(K/d)/m)
+    whenever the two predictors are close -- which is exactly the
+    regime where a near-Bayes fallback made certification hopeless at
+    m = 2000. The variance is estimated from the same holdout; that is
+    what the theorem licenses (the bound is self-normalizing), and it
+    requires m >= 2.
+    """
+    z = np.asarray(z, dtype=float)
+    m = len(z)
+    _validate(m, delta, n_candidates)
+    if m < 2:
+        raise ValueError("empirical Bernstein needs m >= 2")
+    L = log(2.0 * n_candidates) - log(delta)  # ln(2K/delta)
+    v = float(np.var(z, ddof=1))
+    return sqrt(2.0 * v * L / m) + 14.0 * L / (3.0 * (m - 1))
+
+
+def paired_margin(
+    z: np.ndarray, delta: float, n_candidates: int = 1,
+    bound: str = "best",
+) -> tuple[float, str]:
+    """Upper-confidence margin for E[Z] - mean(Z), Z in [-1, 1].
+
+    bound = 'hoeffding' | 'bernstein' | 'best'. 'best' spends delta/2 on
+    each and takes the smaller: valid by a union bound, and never worse
+    than either alone by more than the delta-halving cost. Returns
+    (margin, which_bound_was_used).
+    """
+    z = np.asarray(z, dtype=float)
+    m = len(z)
+    if bound == "hoeffding":
+        return hoeffding_margin(m, delta, n_candidates), "hoeffding"
+    if bound == "bernstein":
+        return empirical_bernstein_margin(z, delta, n_candidates), "bernstein"
+    if bound != "best":
+        raise ValueError("bound must be 'hoeffding', 'bernstein' or 'best'")
+    h = hoeffding_margin(m, delta / 2, n_candidates)
+    if m < 2:
+        return h, "hoeffding"
+    b = empirical_bernstein_margin(z, delta / 2, n_candidates)
+    return (b, "bernstein") if b < h else (h, "hoeffding")
 
 
 @dataclass
@@ -100,7 +159,8 @@ class GateDecision:
     n_candidates: int                # declared bound on ALL candidates
                                      # examined against this holdout,
                                      # not just those reported
-    margin: float                    # sqrt(2 log(K/delta)/m)
+    margin: float                    # upper-confidence margin used
+    bound_used: str                  # 'hoeffding' | 'bernstein' | 'n/a'
     paired_loss_difference: float    # D_hat (negative = candidate better)
     candidate_holdout_accuracy: float | None
     fallback_holdout_accuracy: float
@@ -119,8 +179,14 @@ def certify_release(
     delta: float = 0.05,
     n_candidates: int = 1,
     fallback_kind: str | None = None,
+    bound: str = "best",
 ) -> GateDecision:
     """Apply the release rule to predictions on a fresh holdout.
+
+    `bound` selects the concentration inequality for the margin:
+    'hoeffding' (range-only), 'bernstein' (empirical variance), or
+    'best' (default: delta/2 on each, take the smaller; valid by union
+    bound). See `paired_margin`.
 
     SCOPE (external review, sec 3.3): this is a GATE-DECISION
     implementation. It computes and certifies the decision; it does not
@@ -160,12 +226,12 @@ def certify_release(
     if not (np.isfinite(epsilon) and 0.0 <= epsilon <= 1.0):
         raise ValueError("epsilon must be finite and in [0, 1]")
     m = len(y)
-    margin = hoeffding_margin(m, delta, n_candidates)  # validates inputs
+    _validate(m, delta, n_candidates)
     fb_acc = float(np.mean(fallback_preds == y))
     common = dict(
         m=m, epsilon=epsilon, delta_family=delta,
         delta_per_candidate=delta / n_candidates,
-        n_candidates=n_candidates, margin=margin,
+        n_candidates=n_candidates,
         fallback_holdout_accuracy=fb_acc, fallback_kind=fallback_kind,
     )
 
@@ -173,6 +239,8 @@ def certify_release(
         return GateDecision(
             released="fallback",
             reason="candidate failed to execute; gate fails closed",
+            margin=hoeffding_margin(m, delta, n_candidates),
+            bound_used="n/a",
             paired_loss_difference=float("nan"),
             candidate_holdout_accuracy=None,
             certificate="released fallback: L(out) = L(h0) trivially",
@@ -184,15 +252,19 @@ def certify_release(
         raise ValueError("candidate predictions must match labels")
     cand_loss = (candidate_preds != y).astype(float)
     fb_loss = (fallback_preds != y).astype(float)
-    d_hat = float(np.mean(cand_loss - fb_loss))
+    z = cand_loss - fb_loss
+    d_hat = float(np.mean(z))
+    margin, which = paired_margin(z, delta, n_candidates, bound=bound)
 
     accept = d_hat + margin <= epsilon
     return GateDecision(
         released="candidate" if accept else "fallback",
         reason=(
-            f"D_hat + r = {d_hat:+.4f} + {margin:.4f} "
+            f"D_hat + r = {d_hat:+.4f} + {margin:.4f} ({which}) "
             f"{'<=' if accept else '>'} epsilon = {epsilon:.4f}"
         ),
+        margin=margin,
+        bound_used=which,
         paired_loss_difference=d_hat,
         candidate_holdout_accuracy=float(np.mean(candidate_preds == y)),
         certificate=(

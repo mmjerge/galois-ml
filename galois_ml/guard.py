@@ -64,6 +64,8 @@ detection" are separate measured quantities.
 from __future__ import annotations
 
 import re
+
+import numpy as np
 from dataclasses import dataclass, field
 from functools import lru_cache
 from math import comb
@@ -269,6 +271,9 @@ class ToolGuard:
                 "policy must be 'flag', 'flag_routed', 'block' or 'repair'"
             )
         self.class_names = tuple(self.class_names)
+        # per-prime store of reported class marginals, for the same-prime
+        # joint realizability check: {p: {class: {k: {value: freq}}}}
+        self._joint: dict = {}
         # Repair callbacks are request-scoped state. Thread-local storage
         # (plus explicit passing on the validation path, where the
         # recomputation must be cached) removes the cross-thread hazard
@@ -423,7 +428,82 @@ class ToolGuard:
                         f"{sorted(attainable_values(self.degree, n))}.",
                         text,
                     )
+        detail = self._record_and_check_joint(n, labels, bodies)
+        if detail:
+            return self._fail(tool, "joint_realizability", THEOREM, detail, text)
         return text
+
+    # -- joint realizability of marginal reports (stateful) ---------------
+
+    def _record_and_check_joint(self, n: int, labels, bodies) -> str | None:
+        """Record this call's per-class marginals of a_n and, when two or
+        more powers of the same prime have been reported for a class,
+        check that ONE distribution over residue degrees explains all of
+        them (Proposition: same-prime joint realizability).
+
+        For a prime power n = p^k, the reported class marginal of a_{p^k}
+        must be the image of a single distribution q over divisors f | d
+        under v = R(b_{d,k}(f)). Across the visible powers k of the same
+        prime this is ONE q. Realizability is therefore the feasibility
+        of a small LP: q >= 0, sum q = 1, and for every recorded (k, v),
+        sum_{f : R(b_{d,k}(f)) = v} q_f within rounding tolerance of the
+        reported frequency (unreported rendered values must have mass
+        below the rounding threshold). The LP is exact: feasible iff
+        some mixture realizes every report. It is class-agnostic (q is
+        free), so a consistent relabeling still passes -- as the
+        impossibility result requires -- while individually attainable
+        marginals that cannot come from one sample are caught. Returns a
+        detail string on infeasibility, else None.
+
+        Note on the trusted computing base: this check uses
+        scipy.optimize.linprog, imported lazily; the rest of the module
+        is standard-library only.
+        """
+        fac = _prime_power_factorization(n)
+        if len(fac) != 1:
+            return None
+        p, k = fac[0]
+        store = self._joint.setdefault(p, {})
+        for label, body in zip(labels, bodies):
+            entries = [e.rsplit(": ", 1) for e in body.split(", ")]
+            store.setdefault(label, {})[k] = {v: float(pr) for v, pr in entries}
+        for label, by_k in store.items():
+            if len(by_k) < 2:
+                continue
+            if not self._jointly_realizable(by_k):
+                ks = sorted(by_k)
+                return (
+                    f"For class {label}, the reported marginals of "
+                    f"a_(p^k) for p={p}, k in {ks} are individually "
+                    f"attainable but no single distribution over residue "
+                    f"degrees realizes all of them (same-prime joint "
+                    f"realizability LP infeasible)."
+                )
+        return None
+
+    def _jointly_realizable(self, by_k: dict[int, dict[str, float]]) -> bool:
+        from scipy.optimize import linprog
+
+        divisors = [f for f in range(1, self.degree + 1) if self.degree % f == 0]
+        tol = 0.0005 + 1e-9  # %.3f rounding half-width
+        A_ub, b_ub = [], []
+        for k, freqs in by_k.items():
+            rendered = [
+                f"{float(comb(self.degree // f + k // f - 1, self.degree // f - 1) if k % f == 0 else 0):g}"
+                for f in divisors
+            ]
+            for v in set(rendered) | set(freqs):
+                row = [1.0 if r == v else 0.0 for r in rendered]
+                target = freqs.get(v, 0.0)
+                # target - tol <= row.q <= target + tol
+                A_ub.append(row); b_ub.append(target + tol)
+                A_ub.append([-x for x in row]); b_ub.append(-(target - tol))
+        res = linprog(
+            c=np.zeros(len(divisors)), A_ub=np.array(A_ub), b_ub=np.array(b_ub),
+            A_eq=np.ones((1, len(divisors))), b_eq=np.array([1.0]),
+            bounds=[(0, 1)] * len(divisors), method="highs",
+        )
+        return res.status == 0
 
     def _prime_signature_consistent(
         self, p: int, observed: list[tuple[int, str]]

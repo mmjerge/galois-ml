@@ -210,6 +210,27 @@ that catches the format-mimicking \texttt{verification\_stealth}
 attack.
 \end{itemize}
 
+The theorem class also includes a \emph{joint} check on marginal
+reports, which closes a gap the coordinatewise checks leave open:
+
+\begin{proposition}[Same-prime joint realizability]\label{prop:joint}
+Fix a prime $p$ and a class. For each visible power $k$, the honest
+tool reports the class marginal of $a_{p^k}$, which is the image of
+one distribution $q$ over residue degrees $f\mid d$ under
+$f\mapsto R(b_{d,k}(f))$, where $b_{d,k}$ is \eqref{eq:euler} and $R$
+the renderer. A set of reported marginals $\{c_k\}$ is realizable by
+some mixture iff the linear program
+$q\ge0,\ \sum_f q_f=1,\ |\sum_{f:R(b_{d,k}(f))=v}q_f-c_k(v)|\le\tau$
+for all $(k,v)$, with $\tau$ the rounding half-width, is feasible.
+\end{proposition}
+Feasibility is decided exactly (a few variables; divisors of $d$).
+The check is class-agnostic---$q$ is free---so a consistent relabeling
+passes, as Prop.~\ref{prop:imp} requires, while individually
+attainable marginals that no single sample could produce (e.g.\
+$\Pr[a_p{=}d]=\tfrac12$ with $\Pr[a_{p^2}{=}\binom{d+1}{2}]=0$) are
+refused. It is the one check in the verifier that depends on
+\texttt{scipy} rather than the standard library.
+
 Detection is computed, not sampled (Table~\ref{tab:matrix}), and is
 identical across tasks. The verifier deliberately knows nothing that
 distinguishes the candidate classes: a verifier that did would be an
@@ -296,19 +317,35 @@ evidence was.
 \begin{theorem}[Fresh-holdout gate]\label{thm:gate}
 Let $h_1,\dots,h_K$ be candidate predictors and $h_0$ a fallback, all
 fixed before a holdout $H=((X_i,Y_i))_{i=1}^m\sim D^m$ is drawn, with
-0--1 loss $\ell$. Let
-$\hat\Delta_j=\frac1m\sum_i[\ell(h_j,Z_i)-\ell(h_0,Z_i)]$ and
-$r=\sqrt{2\log(K/\delta)/m}$. Release only $h_0$ or a candidate with
-$\hat\Delta_j+r\le\epsilon$, $0\le\epsilon\le1$. Then
+0--1 loss $\ell$. Let $Z_{ji}=\ell(h_j,Z_i)-\ell(h_0,Z_i)\in\{-1,0,1\}$,
+$\hat\Delta_j=\frac1m\sum_i Z_{ji}$, $V_j$ the unbiased sample
+variance of $(Z_{ji})_i$, and
+\begin{align}
+r^{H}&=\sqrt{2\log(2K/\delta)/m},\label{eq:hoeff}\\
+r^{B}_j&=\sqrt{2V_j\log(4K/\delta)/m}+\tfrac{14\log(4K/\delta)}{3(m-1)},\label{eq:bern}
+\end{align}
+$r_j=\min(r^H,r^B_j)$. Release only $h_0$ or a candidate with
+$\hat\Delta_j+r_j\le\epsilon$, $0\le\epsilon\le1$. Then
 $\Pr[\risk{h_{\mathrm{out}}}>\risk{h_0}+\epsilon]\le\delta$, and
 $\mathbb{E}[(\risk{h_{\mathrm{out}}}-\risk{h_0})_+]\le\epsilon+\delta(1-\epsilon)$.
 \end{theorem}
 \begin{proof}
-Paired losses lie in $[-1,1]$; one-sided Hoeffding with a union bound
-over $K$ gives $\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r$ for all $j$
-with probability $\ge1-\delta$; accepted candidates then satisfy the
-bound and rejection releases $h_0$.
+Spend $\delta/2$ on each inequality. One-sided Hoeffding on $[-1,1]$
+with a union bound over $K$ gives $\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r^H$
+for all $j$ w.p.\ $\ge1-\delta/2$; the empirical-Bernstein inequality
+of Maurer and Pontil~\cite{maurerpontil2009} (range $2$) gives the same
+with $r^B_j$ w.p.\ $\ge1-\delta/2$. On the intersection, accepted
+candidates satisfy the bound and rejection releases $h_0$.
 \end{proof}
+
+The variance term is what makes the gate usable against a strong
+fallback. Paired 0--1 differences are mostly zero when the two
+predictors are close, so $V_j\ll1$ and $r^B\ll r^H$. Empirically
+(sextic, a genuine agent rule at $\approx0.92$ against the theorem
+fallback at $0.951$, true excess $\approx0.03$): at $m=2000$,
+$r^H=0.055$ versus $r^B=0.022$, and the rule certifies at
+$\epsilon=0.05$; under Hoeffding alone the same certification needed
+$m\gtrsim6\times10^4$.
 
 The bound has no factor in the number of agents $N$ or the number of
 compromised agents $k\le N$: all agents may be compromised and submit
@@ -523,6 +560,8 @@ them believes.
 fields, but how? The case of Galois groups,'' arXiv:2508.06670, 2025.
 \bibitem{anthropic2026} Anthropic Frontier Red Team, ``Patterns and
 problems in emerging multiagent systems,'' Aug. 2026.
+\bibitem{maurerpontil2009} A. Maurer and M. Pontil, ``Empirical
+Bernstein bounds and sample variance penalization,'' \emph{COLT}, 2009.
 \bibitem{nds2} NDS2 Lab, Agentic AI Security Initiative, project
 index, 2026. \url{https://agentaisec.github.io}.
 \end{thebibliography}
