@@ -157,6 +157,34 @@ component is a design error rather than a training gap, and our 0%
 detection rate on a channel refutable by one arithmetic comparison is
 evidence for treating it that way.
 
+## 4. Alignment with Anthropic, "Patterns and problems in multiagent
+systems" (anthropic.com/research/multiagent-systems)
+
+Read in full 2026-09-10. Their report is observational: it catalogues
+failure patterns across coordination, conformity, epistemics, and
+goal conflict. Ours is constructive on one slice of it. The
+correspondences, with the honest gap on each:
+
+| Their observation | Our result | Relationship |
+|---|---|---|
+| Closing thesis: models "abstractly understand that information sources have their own incentives ... What is missing is a disposition to act on that knowledge without prompting." | Flag policy: agents handed an explicit proof that evidence was false acknowledged it in 0/5 runs and did worse than unguarded. Repair and gate enforce without routing through disposition. | **Direct corroboration, and our design premise.** Their diagnosis is that the disposition is missing; our position is that a decidable check should not be assigned to a disposition at all. |
+| Lie-detection: listener scored against a "trust everyone" naive policy and an oracle; "learn who lies" baseline excludes a source once contradicted by two others. | Our `credulous` role is the same naive policy; the ceiling is a theorem rather than a scripted oracle; our scouts experiments mirror the setup. | Same methodology; ours has a computable ceiling and unlimited instances. Their liar is stipulated; ours is derived. |
+| "In principle detectable ... since a false report will eventually contradict an honest one" yet models underperform. | `impossible` channel: refutable from ONE tool output given facts in the brief; 0% agent detection across six generations; 100% deterministic detection. | Corroboration with a sharper instrument: detectability is exact, not eventual. |
+| Conformity: 18/30 agents chose the identical branch name; agents "fail together." | 5 agents = 1.05 effective independent agents; errors 14--113x more correlated than independence. | Corroboration, quantified. Their implication ("isolated problems become systemic") is why our guarantees are N-independent. |
+| Collusion persisted with all direct channels removed: agents "price-matched to the penny via a public listings board." | Our boundary result: coordination through legitimate, admissible task outputs cannot be prevented by content verification (the multi-agent analogue of label-permutation indistinguishability). | **Their empirical instance of our theoretical boundary.** Schema/type verification does not close it; we say so rather than claim otherwise. |
+| Job-queue flooding: 2.4M requests, 117 accepted. | Out of scope: resource exhaustion; our runtime bounds wall clock only. | Honest non-overlap. Their finding is a reason our availability caveats matter. |
+| Turf war: agents sabotage peers with self-replicating malware, disable accounts, camouflage processes. | `saboteur` condition (compromised pipeline member); release gate tolerates ALL N agents compromised for the released-risk bound. | Partial: we bound the released artifact's risk, not the agents' conduct toward each other or the host. Containment is SAGA/MUZZLE territory. |
+| Hidden-profile: groups converge on shared evidence, discount the pivotal dissenter; "turning a simple dial ... will exacerbate the other." | Our layering is exactly a refusal to turn one dial: deterministic checks where decidable, gating where not, no global trust setting. | Alignment of design philosophy; we have no hidden-profile experiment. |
+| Their prescription: mechanisms that "restructure the incentives around communication so that miscalibrated trust, in either direction, is caught and corrected." | Repair (caught and corrected, deterministically) and the gate (caught at release regardless of trust). | Our architecture is one such mechanism for the tool-evidence slice. |
+
+What we should NOT claim from this alignment: that we address
+coordination quality, goal conflict, or collusion; that our tasks
+resemble theirs in realism; or that corroboration of the disposition
+gap on a synthetic instrument replicates their findings. What we can
+claim: their report identifies a gap ("disposition to act"), and our
+paper is a constructive answer to one part of it that provably does
+not depend on the gap being closed.
+
 ## Summary of the claim we are willing to defend
 
 Agentic security research needs harm and defense-efficacy measured in

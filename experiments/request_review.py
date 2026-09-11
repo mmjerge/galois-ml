@@ -400,6 +400,51 @@ Mark every place the claim is fallback-relative.
 thing you can tell me.
 """
 
+ALIGNMENT_TASK = """\
+Seventh consultation. We want to position the paper against Anthropic's
+report "Patterns and problems in multiagent systems"
+(https://www.anthropic.com/research/multiagent-systems). Below is OUR
+mapping of their observations to our results (docs/POSITIONING.md sec
+4) and the related-work paragraph now in the paper draft. You cannot
+fetch the page; work from the mapping and the short quotes in it.
+
+Please audit the mapping as a hostile reviewer who knows that report:
+
+1. OVERREACH. For each row, is the stated relationship ("direct
+   corroboration", "same methodology", "their empirical instance of
+   our boundary", "partial", "honest non-overlap") the strongest
+   HONEST characterization, or does it overclaim? Rewrite any row
+   that overclaims.
+
+2. THE THESIS LINK. Their closing sentence is that models lack "a
+   disposition to act on that knowledge without prompting." We frame
+   our architecture as the constructive answer to that gap: do not
+   assign decidable checks to a disposition; enforce via repair and
+   gating that are disposition-independent. Is this a fair use of
+   their conclusion, or does it put words in their mouth? How should
+   the paper phrase it so a coauthor of that report would accept it?
+
+3. THE COLLUSION-BOUNDARY LINK. They found agents colluded through a
+   public listings board after all direct channels were removed. We
+   call this an empirical instance of our formal boundary
+   (coordination through admissible outputs is not preventable by
+   content verification; the label-permutation analogue). Is the
+   analogy structurally valid, or are these different phenomena that
+   merely rhyme? Be precise about what would make them the same.
+
+4. WHAT WE COULD RUN. Which of their experiments could be reproduced
+   on our testbed with exact ground truth -- hidden-profile (pivotal
+   private evidence vs shared wrong consensus) seems natural: give one
+   agent a decisive coefficient the others lack. Design the cheapest
+   one that would add a genuinely new corroboration rather than a
+   restatement.
+
+5. PLACEMENT. Should this alignment be a related-work paragraph (as
+   now), a discussion subsection, or motivation in the introduction?
+   Write the version you would accept at the strongest honest
+   strength.
+"""
+
 TASK = """\
 You are reviewing a research codebase and its empirical results. Please be
 critical and specific. I would rather hear that a claim is unsupported than
@@ -648,8 +693,22 @@ def _sample_transcript() -> str:
 def build_prompt(extra_source: list[str], mode: str = "review") -> str:
     tasks = {"review": TASK, "guarantees": GUARANTEES_TASK,
              "airtight": AIRTIGHT_TASK, "enforcement": ENFORCEMENT_TASK,
-             "satml": SATML_TASK, "math": MATH_TASK}
+             "satml": SATML_TASK, "math": MATH_TASK,
+             "alignment": ALIGNMENT_TASK}
     parts = [tasks[mode]]
+    if mode == "alignment":
+        pos = (ROOT / "docs" / "POSITIONING.md").read_text()
+        sec = pos[pos.index("## 4. Alignment with Anthropic"):]
+        tex = (ROOT / "paper" / "satml" / "main.tex").read_text()
+        rw = tex[tex.index("\\section{Related Work}"):tex.index("\\section{Limitations}")]
+        parts.append("=" * 78 + "\nOUR MAPPING (docs/POSITIONING.md sec 4)\n"
+                     + "=" * 78 + "\n" + sec)
+        parts.append("=" * 78 + "\nPAPER RELATED-WORK PARAGRAPH\n" + "=" * 78
+                     + "\n" + rw)
+        prompt_only = "\n\n".join(parts + [
+            "=" * 78 + "\nEND. Work through the five questions.\n" + "=" * 78
+        ])
+        return prompt_only
     if mode == "airtight":
         extra_source = list(extra_source) + ["gate"]
     if mode in ("enforcement", "satml"):
@@ -834,7 +893,8 @@ def main() -> None:
     ap.add_argument("--max-tokens", type=int, default=16000)
     ap.add_argument("--mode",
                     choices=("review", "guarantees", "airtight",
-                             "enforcement", "satml", "math"),
+                             "enforcement", "satml", "math",
+                             "alignment"),
                     default="review",
                     help="review: critical code/results review; "
                          "guarantees: design provable security guarantees; "

@@ -530,12 +530,24 @@ Indirect prompt injection and compromised-agent architectures
 (MUZZLE, ACE, SAGA-BFT~\cite{nds2}) operate at the permission and
 containment boundary; we operate at the epistemic boundary---not
 whether a tool is authorized but whether what it said can be true---and
-the two compose. Anthropic's multi-agent report~\cite{anthropic2026}
-scores models against naive and oracle policies with stipulated ground
-truth and documents that agents fail together; our ceilings are
-derived, and our measured $1.05$ effective independent agents of $5$
-is motivation for agent-count-independent guarantees, not a premise of
-any proof. Lee and Lee~\cite{leelee2025} established the arithmetic
+the two compose. Anthropic's multi-agent report~\cite{anthropic2026} is the closest
+observational counterpart. It scores lie detection against a naive
+``trust everyone'' policy and an oracle with stipulated ground truth;
+ours is the same methodology with a derived ceiling. Its conclusion
+that models ``abstractly understand that information sources have
+their own incentives'' but lack ``a disposition to act on that
+knowledge without prompting'' is our design premise: our flag-policy
+result is a controlled instance of the gap (agents handed a proof of
+corruption did not act on it), and repair and gating are enforcement
+that does not route through disposition. Its observation that agents
+colluded ``to the penny via a public listings board'' after every
+direct channel was removed is an empirical instance of the boundary
+we state formally: coordination through admissible outputs is not
+preventable by content verification. Its conformity findings ($18/30$
+agents choosing an identical branch name) match our $1.05$ effective
+independent agents of $5$, which motivates agent-count-independent
+guarantees but is a premise of no proof here. We do not address its
+coordination-quality, goal-conflict, or resource-flooding findings. Lee and Lee~\cite{leelee2025} established the arithmetic
 criteria we use as ground truth. Selective classification and
 fallback-relative certification are standard; our contribution is
 their composition with mediation and repair, and the separation of
