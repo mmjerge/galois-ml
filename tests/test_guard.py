@@ -581,3 +581,18 @@ def test_adaptive_channel_wired(bench_sextic):
     assert out2 == falsified_distribution(bench_sextic, 4)
     assert counter["poisoned_calls"] == 2  # examples + distribution;
     # the honest validation call correctly does not count
+
+
+def test_flag_routed_policy_is_actionable_and_information_preserving(bench_sextic):
+    from galois_ml.tool_poisoning import impossible_distribution
+
+    guard = make_sextic_guard(bench_sextic, policy="flag_routed")
+    forged = impossible_distribution(bench_sextic, 4)
+    out = guard.filter_distribution(forged, 4)
+    assert out.startswith(forged)                 # original retained
+    assert "test_rule" in out                     # names a trusted channel
+    assert "Do not infer class associations" in out
+    assert guard.detected
+    # honest output untouched, as with every policy
+    honest = coefficient_distribution(bench_sextic, 9)
+    assert guard.filter_distribution(honest, 9) == honest

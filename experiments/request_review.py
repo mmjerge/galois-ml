@@ -284,6 +284,68 @@ QUESTIONS:
    something else first.
 """
 
+SATML_TASK = """\
+Fifth consultation: act as a SaTML (IEEE Conference on Secure and
+Trustworthy Machine Learning) area chair. You have reviewed this work
+four times; every bug and overclaim you found has been fixed (see the
+findings document's correction logs, secs 5, 8, 10). Since your last
+review we added: an implemented adaptive adversary (`data_adaptive`,
+sec 11) with live-agent results (sec 11.3), gate operating
+characteristics with independent audits (sec 11.2), and a PRESPECIFIED
+randomized interleaved confirmatory study (`confirmatory_eval.py`,
+protocol registered in its docstring, analysis fixed in code; 180 runs,
+not yet executed).
+
+A collaborator's own assessment, which you should agree with or
+dismantle:
+
+  "Strong venue fit but not yet acceptance-ready. Fit: exact ground
+  truth so harm is measured not judged; a negative finding (warnings
+  made things worse); an impossibility boundary; the attacker's
+  dilemma; a defense stack with stated guarantee classes; four rounds
+  of adversarial review with published corrections. Gaps, in order:
+  (1) the confirmatory study has not run, so the central empirical
+  claim rests on n=5 sequential unrandomized arms; (2) one model
+  family -- everything is Claude; (3) the synthetic-task objection
+  must be met head-on with the LMFDB validation prominent; (4) the
+  'multi-agent' claim is proven N-independent but empirically it is
+  analyst-plus-tools -- without the inter-agent envelope experiment,
+  title around pipelines, not collaboration. Verdict: borderline-
+  reject today; credible accept with a confirmed primary hypothesis
+  plus a second model."
+
+QUESTIONS:
+
+1. VERDICT. Assuming the confirmatory primary hypothesis confirms at
+   alpha=0.05 with degree21 replicating, and one additional model
+   family is added: accept, weak accept, borderline, or reject at
+   SaTML? Which single missing element most changes that answer?
+   Then the same question if the primary does NOT confirm.
+
+2. CONTRIBUTION STATEMENT. Write the three-bullet contribution list
+   you would want to see, at the precision that survives your own
+   review. Then the two most likely Reviewer-2 attacks and the
+   one-paragraph rebuttal to each.
+
+3. THE SYNTHETIC-TASK OBJECTION. Is "the number theory is the
+   instrument; the guarantees are architectural" sufficient for
+   SaTML, or does the paper need at least one non-synthetic task?
+   If so, what is the cheapest credible one?
+
+4. SECTION 11.3 SPECIFICALLY. The adaptive attack caused ~zero harm to
+   live agents (unguarded 0.920, repair 0.890, clean 0.895) while it
+   destroyed a credulous learner (0.240). We attribute this to the
+   attacker's dilemma (validation must stay honest, and honest
+   validation re-anchors orientation), with a named confound (the
+   model knows S3's element orders from pretraining). Is the dilemma
+   framing sound, is the confound fatal, and what is the minimal
+   experiment to separate them?
+
+5. PAGE BUDGET. SaTML is ~12 pages. Which of the results in the
+   findings document belong in the main text, which in appendix,
+   which should be cut? The paper currently risks being a catalogue.
+"""
+
 TASK = """\
 You are reviewing a research codebase and its empirical results. Please be
 critical and specific. I would rather hear that a claim is unsupported than
@@ -531,11 +593,12 @@ def _sample_transcript() -> str:
 
 def build_prompt(extra_source: list[str], mode: str = "review") -> str:
     tasks = {"review": TASK, "guarantees": GUARANTEES_TASK,
-             "airtight": AIRTIGHT_TASK, "enforcement": ENFORCEMENT_TASK}
+             "airtight": AIRTIGHT_TASK, "enforcement": ENFORCEMENT_TASK,
+             "satml": SATML_TASK}
     parts = [tasks[mode]]
     if mode == "airtight":
         extra_source = list(extra_source) + ["gate"]
-    if mode == "enforcement":
+    if mode in ("enforcement", "satml"):
         extra_source = list(extra_source) + ["gate", "release"]
 
     findings = ROOT / "docs" / "GUARD_FINDINGS.md"
@@ -710,7 +773,7 @@ def main() -> None:
     ap.add_argument("--max-tokens", type=int, default=16000)
     ap.add_argument("--mode",
                     choices=("review", "guarantees", "airtight",
-                             "enforcement"),
+                             "enforcement", "satml"),
                     default="review",
                     help="review: critical code/results review; "
                          "guarantees: design provable security guarantees; "

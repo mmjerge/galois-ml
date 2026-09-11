@@ -74,7 +74,7 @@ def main() -> None:
              "separately from agent detection",
     )
     ap.add_argument(
-        "--guard-policy", choices=("flag", "block", "repair"),
+        "--guard-policy", choices=("flag", "flag_routed", "block", "repair"),
         default="flag",
         help="what a guard violation does to the output the agent sees: "
              "annotate it (flag), withhold it (block), or substitute the "

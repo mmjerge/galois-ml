@@ -607,10 +607,11 @@ mechanism study, (5) exact-counts evidence format.
 "attacks we designed to be caught" with the attack the theory says is
 optimal, and the algebraic 0/178 with real operating characteristics.
 
-### 11.1 The optimal channel attacker vs the full defense stack
+### 11.1 The defense-aware consistent-relabeling attacker vs the full defense stack
 
-`data_adaptive` is the rational adversary's play against this
-architecture, derived from the guarantees themselves: one consistent
+`data_adaptive` is a defense-aware adversary derived from the
+guarantees themselves (not a proven optimum over the accepted-output
+attack space, which we have not characterized): one consistent
 label permutation across distributions AND examples (class names
 matched, so the schema consistency check that catches `combined` has
 nothing to catch), exact honest grammar, attainable values -- and an
@@ -628,9 +629,10 @@ lie there is detected and repaired. End to end:
 - **The release gate refuses it**; released excess over the fallback
   on an independent 20,000-sample audit: **+0.0000**.
 
-That is the three-layer claim executed against the strongest channel
-adversary in the threat model: evidence layer provably blind, harm
-without the gate near-maximal, released harm zero.
+That is the three-layer claim executed against a defense-aware channel
+adversary: evidence layer blind by construction, large harm to a
+validation-free learner without the gate, zero released excess with
+it.
 
 ### 11.2 Gate operating characteristics with designed boundary
 candidates and independent audits
@@ -683,30 +685,71 @@ temperature 0.7, seeds 0-4). Median accuracy:
 | data_adaptive, unguarded | 5 | 0.9200 | 0.867-0.945 | - | 0/5 |
 | data_adaptive, repair guard | 5 | 0.8900 | 0.867-0.925 | **0/5** | 1/5 |
 
-Three findings:
+Headline, at the strength the fifth external review would accept:
 
-1. **The guard's blindness held in live runs: 0/10 guarded detections
-   across 130+ poisoned tool responses.** The impossibility theorem's
-   live confirmation. The repair arm also matches the unguarded arm
-   (0.890 vs 0.920 medians, overlapping ranges, well inside the
-   noise band), as required: repair provably cannot act here.
-2. **The attack caused approximately zero harm to real agents** -- in
-   sharp contrast to the credulous learner, which collapsed to 0.240
-   under the identical evidence. Transcripts show why: final
-   conjectures state the CORRECT class orientation with correct
-   group-theoretic rationale ("S3 has 3 of 6 elements of order 2..."),
-   after iterating against the honest validation tool ("Same 87%...
-   Let me finalize").
-3. **The attacker's dilemma, empirically.** The adaptive attacker must
-   leave validation honest (any lie there is caught by recomputation
-   and, under repair, silently corrected). But an honest validation
-   loop lets the victim test its way back to the right orientation
-   regardless of what the evidence channels claim. The recomputation
-   guarantee therefore does not DETECT the data attack -- it DISARMS
-   it, by forcing the only unverifiable lies onto channels the victim
-   can cross-check against trusted execution. That squeeze is the
-   guard's real contribution on this channel, and it was invisible in
-   the detection-rate metric.
+> The consistent relabeling attack evaded the evidence checks but
+> produced no clear accuracy degradation in this small live-agent
+> study. Transcripts are consistent with both trusted-validation
+> feedback and pretrained group knowledge acting as orientation
+> anchors; their contributions are not separated.
+
+Findings:
+
+1. **The guard's blind spot held in live runs: 0 detections in the 5
+   guarded runs, across 142 poisoned tool responses** (an earlier
+   draft said "0/10"; the guarded arm has five runs). This is
+   consistent with the implemented blind spot the restricted
+   impossibility result describes; it is not an empirical proof of a
+   theorem. The repair and unguarded arms show similar medians (0.890
+   vs 0.920) with overlapping ranges -- consistent with repair having
+   nothing to act on, not a demonstration of equivalence.
+2. **No clear harm to live agents**, in contrast to the credulous
+   learner (0.240 under identical evidence). Final conjectures state
+   the correct orientation with correct group-theoretic rationale,
+   after iterating against validation ("Same 87%... Let me
+   finalize"). The credulous learner is a positive control for the
+   poisoning's ability to invert learning, not a matched causal
+   control for the LLM (reasoning, priors, and validation access all
+   differ).
+3. **A structural constraint, not yet a demonstrated mechanism.** The
+   defensible statement: under trusted validation recomputation and
+   complete mediation, the attacker cannot make a false validation
+   result persist at the agent-visible interface (it may corrupt
+   validation; repair renders the corruption ineffective). That
+   CONSTRAINS the attacker. Whether it DISARMS the attack depends on
+   the agent calling validation, proposing an orientation-reversing
+   alternative, and interpreting the feedback -- none of which this
+   experiment isolates, because both live attacked arms had honest
+   validation AND named groups. "Defense-aware consistent-relabeling
+   attacker" is the correct name for this channel; "optimal" would
+   need an optimization result over the accepted-output attack space
+   that we have not given.
+
+**Designed, not yet run: the anchor factorial.** 2 x 2 under the same
+relabeling attack -- {named groups, opaque per-run randomly mapped
+labels} x {validation available, validation unavailable} -- with clean
+counterparts for the anonymized cells, randomized/interleaved, fixed
+tool budgets, and FINAL ORIENTATION prespecified as the mechanism
+endpoint alongside accuracy. Anonymization must remove group names
+from every exposed interface (brief, tool outputs, guard class names),
+not just the brief: the model may still recognize S3-like structure,
+but must not be able to learn from pretraining which opaque label it
+maps to. Plus one stress cell: validation corrupted too, recomputation
+enabled vs disabled, to isolate the guard's causal role.
+
+**Also designed and implemented, not yet run: the competent-advisory
+baseline.** `ToolGuard(policy="flag_routed")` issues an ACTIONABLE
+warning (names the failed source, states that test_rule is
+independently verified and remains reliable, gives no task answers)
+under the same trust assumptions as `flag`. The fifth review
+identified this as the single element most changing the acceptance
+verdict: without it, the pilot's headline risks reading as "a
+deliberately minimal warning loses to trusted substitution". If routed
+warnings recover performance, the contribution sharpens into
+behavior-dependent mitigation vs conditional restoration guarantee; it
+does not invalidate the paper. Reviewers will also want the simplest
+trusted baselines alongside: unconditional recomputation and
+gate-only release.
 
 Two honest qualifications. First, a confound on mechanism: the brief
 names the candidate groups, and the model demonstrably derives their
@@ -723,7 +766,41 @@ unguarded risk; the guarded row does not understate guarded risk, which
 is the row the architecture claims.
 
 Layered with 11.1-11.2: the victim that cannot validate (credulous
-learner) is destroyed by the attack and saved by the gate; the victim
-that can validate is saved by the attacker's dilemma before the gate is
-even reached. Defense in depth, with each layer's contribution now
-separately measured.
+learner) is destroyed by the attack and refused by the gate; the live
+agents were not clearly harmed, for reasons the anchor factorial must
+separate. Defense in depth, with the layers' contributions only partly
+disentangled so far.
+
+## 12. Fifth external review (SaTML area-chair framing, 2026-09-10)
+
+Full text: `experiments/outputs/satml_response.md`. Verdict:
+conditional WEAK ACCEPT if the prespecified primary confirms, degree21
+replicates, a second model family receives the policy comparisons, and
+the paper is scoped to tool-using pipelines rather than collaboration.
+Borderline-to-reject if the primary does not confirm with a tight
+interval. Two corrections to our own framing adopted:
+
+- **Confirming repair > flag does not confirm "warnings made things
+  worse."** That needs flag < unguarded, which is a secondary. The
+  abstract must not conflate them.
+- **The single most valuable missing element is a competent advisory
+  baseline** (`flag_routed`, now implemented), plus the simplest
+  trusted-resource baselines (unconditional recomputation, gate-only).
+  Without them the headline contrast is vulnerable to "you beat a bad
+  warning string".
+
+Also adopted: `confirmatory-protocol-v1` git tag on the pre-data
+commit as the immutable protocol snapshot; 11.3 rewritten to the
+mechanism-uncertain headline; "optimal attacker" and "near-maximal
+harm" removed; the anchor factorial designed. Recommended title:
+"Detection Is Not Enforcement: Evidence Repair and Risk-Gated Release
+in Tool-Using ML Pipelines". Page-budget triage: the model-layer
+audits (certify.py results), MI-zero attribution, resampling
+degradation, and the cross-layer narrative move out of this paper's
+main argument; the correction logs condense to a reproducibility
+history in the appendix.
+
+Cheapest credible external-data addition: rerun the existing pipeline
+on frozen genuine LMFDB fields (split by field, handle ramified primes
+explicitly, clean/combined/relabeling conditions, three policies,
+frozen artifacts evaluated independently).
