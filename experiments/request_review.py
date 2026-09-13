@@ -445,6 +445,37 @@ Please audit the mapping as a hostile reviewer who knows that report:
    strength.
 """
 
+PAPER_TASK = """\
+You are a SaTML program committee member. Below is the full LaTeX source
+of a submission. Review it as you would for the PC: competency of the
+work, soundness of every claim as written, and an admission
+recommendation. You have seen earlier versions of this project's code
+and results in prior consultations; review THIS document on its own
+merits, as a fresh reviewer would.
+
+Produce a standard structured review:
+
+1. SUMMARY (3-5 sentences, in your words) -- if your summary differs
+   from what the paper thinks it claims, that is itself a finding.
+2. STRENGTHS and WEAKNESSES, each as a ranked list.
+3. SOUNDNESS: every theorem/proposition statement -- correct as stated?
+   hypotheses sufficient for the proof? Every empirical number -- is it
+   presented at the strength the design supports? Flag any sentence
+   that claims more than the evidence given in the paper.
+4. NOVELTY and SIGNIFICANCE relative to what a SaTML reader knows.
+5. CLARITY and PRESENTATION: what a reader will misunderstand.
+6. QUESTIONS FOR THE AUTHORS (things that would change your score).
+7. SCORE on the standard scale (reject / weak reject / borderline /
+   weak accept / accept / strong accept), CONFIDENCE (1-5), and the
+   single change that would most raise the score.
+
+Note: the confirmatory study described in Sec. V-B is in progress; the
+paper says so. Judge whether the paper is honest about that and whether
+the pilot evidence is stated at the right strength -- do not penalize
+the paper for lacking a result it explicitly says it does not yet have,
+but DO say how the recommendation changes with each possible outcome.
+"""
+
 TASK = """\
 You are reviewing a research codebase and its empirical results. Please be
 critical and specific. I would rather hear that a claim is unsupported than
@@ -694,8 +725,14 @@ def build_prompt(extra_source: list[str], mode: str = "review") -> str:
     tasks = {"review": TASK, "guarantees": GUARANTEES_TASK,
              "airtight": AIRTIGHT_TASK, "enforcement": ENFORCEMENT_TASK,
              "satml": SATML_TASK, "math": MATH_TASK,
-             "alignment": ALIGNMENT_TASK}
+             "alignment": ALIGNMENT_TASK, "paper": PAPER_TASK}
     parts = [tasks[mode]]
+    if mode == "paper":
+        tex = (ROOT / "paper" / "satml" / "main.tex").read_text()
+        return "\n\n".join(parts + [
+            "=" * 78 + "\nSUBMISSION (LaTeX source)\n" + "=" * 78 + "\n" + tex,
+            "=" * 78 + "\nEND OF SUBMISSION. Write the review.\n" + "=" * 78,
+        ])
     if mode == "alignment":
         pos = (ROOT / "docs" / "POSITIONING.md").read_text()
         sec = pos[pos.index("## 4. Alignment with Anthropic"):]
@@ -894,7 +931,7 @@ def main() -> None:
     ap.add_argument("--mode",
                     choices=("review", "guarantees", "airtight",
                              "enforcement", "satml", "math",
-                             "alignment"),
+                             "alignment", "paper"),
                     default="review",
                     help="review: critical code/results review; "
                          "guarantees: design provable security guarantees; "

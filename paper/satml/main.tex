@@ -305,7 +305,15 @@ randomness yield equal queries; mediation yields equal responses.
 
 The hypotheses are checked in tests, not assumed: on every detected
 channel, every tool response under attack-plus-repair equals the
-honest response byte-for-byte. The \texttt{data} channels are
+honest response byte-for-byte. Propositions~\ref{prop:imp}
+and~\ref{prop:repair}, the attainability theorem behind the
+\texttt{theorem} class (including the zero-inclusion fact an external
+audit found our first implementation violating), and the deterministic
+clause of Theorem~\ref{thm:gate} are machine-checked in Lean~4 without
+Mathlib (\texttt{lean/} in the repository); the concentration
+inequality itself is taken as a hypothesis there, so the gate's
+correctness is reduced to one standard inequality plus checked
+arithmetic. The \texttt{data} channels are
 undetected and therefore unrepaired; that residual is what the third
 layer covers.
 
