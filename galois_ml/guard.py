@@ -482,28 +482,83 @@ class ToolGuard:
         return None
 
     def _jointly_realizable(self, by_k: dict[int, dict[str, float]]) -> bool:
+        """Exact decision, fail-safe toward acceptance.
+
+        The LP is solved in floating point, but the VERDICT rests only
+        on certificates verified in exact rational arithmetic:
+
+        * feasible: the solver's point is rationalized and every
+          constraint re-checked with `Fraction`; on success the report
+          is accepted.
+        * infeasible: a Farkas certificate (y >= 0 on the inequality
+          rows, w free on the equality row, with A_ub^T y + A_eq^T w >= 0
+          componentwise and b_ub . y + b_eq . w < 0) is obtained from a
+          second LP, rationalized, and verified exactly; only a verified
+          certificate flags the report.
+
+        If neither certificate verifies (solver tolerance, numerical
+        trouble), the report is ACCEPTED: a false accept here costs one
+        undetected inconsistency, a false flag would violate soundness.
+        Constraints are built in rationals from the reported %.3f
+        strings, so the tolerance band is exact.
+        """
+        from fractions import Fraction
+
         from scipy.optimize import linprog
 
         divisors = [f for f in range(1, self.degree + 1) if self.degree % f == 0]
-        tol = 0.0005 + 1e-9  # %.3f rounding half-width
-        A_ub, b_ub = [], []
+        nvar = len(divisors)
+        half = Fraction(1, 2000)  # %.3f rounding half-width, exactly
+        A: list[list[Fraction]] = []
+        b: list[Fraction] = []
         for k, freqs in by_k.items():
             rendered = [
                 f"{float(comb(self.degree // f + k // f - 1, self.degree // f - 1) if k % f == 0 else 0):g}"
                 for f in divisors
             ]
             for v in set(rendered) | set(freqs):
-                row = [1.0 if r == v else 0.0 for r in rendered]
-                target = freqs.get(v, 0.0)
-                # target - tol <= row.q <= target + tol
-                A_ub.append(row); b_ub.append(target + tol)
-                A_ub.append([-x for x in row]); b_ub.append(-(target - tol))
-        res = linprog(
-            c=np.zeros(len(divisors)), A_ub=np.array(A_ub), b_ub=np.array(b_ub),
-            A_eq=np.ones((1, len(divisors))), b_eq=np.array([1.0]),
-            bounds=[(0, 1)] * len(divisors), method="highs",
-        )
-        return res.status == 0
+                row = [Fraction(1) if r == v else Fraction(0) for r in rendered]
+                target = Fraction(str(freqs.get(v, 0.0))) if v in freqs else Fraction(0)
+                A.append(row); b.append(target + half)
+                A.append([-x for x in row]); b.append(-(target - half))
+        for i in range(nvar):  # 0 <= q_i <= 1
+            A.append([Fraction(-1) if j == i else Fraction(0) for j in range(nvar)]); b.append(Fraction(0))
+            A.append([Fraction(1) if j == i else Fraction(0) for j in range(nvar)]); b.append(Fraction(1))
+        Af = np.array([[float(x) for x in r] for r in A]); bf = np.array([float(x) for x in b])
+        ones = np.ones((1, nvar))
+
+        res = linprog(c=np.zeros(nvar), A_ub=Af, b_ub=bf, A_eq=ones,
+                      b_eq=np.array([1.0]), bounds=[(None, None)] * nvar,
+                      method="highs")
+        if res.status == 0:
+            q = [Fraction(float(x)).limit_denominator(10**9) for x in res.x]
+            if sum(q) == 1 and all(
+                sum(a * qi for a, qi in zip(row, q)) <= bi for row, bi in zip(A, b)
+            ):
+                return True
+            # solver point does not verify exactly; try to certify
+            # infeasibility instead, else accept (fail-safe)
+        # Farkas: find y >= 0, w free with A^T y + 1 w >= 0, b.y + w <= -1
+        m = len(A)
+        # variables: y (m), w (1); constraints as A_ub x <= b_ub
+        G = np.zeros((nvar + 1, m + 1)); h = np.zeros(nvar + 1)
+        G[:nvar, :m] = -Af.T; G[:nvar, m] = -1.0          # -(A^T y + w) <= 0
+        G[nvar, :m] = bf; G[nvar, m] = 1.0; h[nvar] = -1.0  # b.y + w <= -1
+        res2 = linprog(c=np.zeros(m + 1), A_ub=G, b_ub=h,
+                       bounds=[(0, None)] * m + [(None, None)],
+                       method="highs")
+        if res2.status != 0:
+            return True  # no certificate: accept
+        y = [Fraction(float(v)).limit_denominator(10**9) for v in res2.x[:m]]
+        w = Fraction(float(res2.x[m])).limit_denominator(10**9)
+        if any(yi < 0 for yi in y):
+            return True
+        for j in range(nvar):
+            if sum(A[i][j] * y[i] for i in range(m)) + w < 0:
+                return True
+        if sum(bi * yi for bi, yi in zip(b, y)) + w >= 0:
+            return True
+        return False  # exactly verified infeasibility certificate
 
     def _prime_signature_consistent(
         self, p: int, observed: list[tuple[int, str]]

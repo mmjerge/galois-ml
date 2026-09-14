@@ -248,13 +248,17 @@ $q\ge0,\ \sum_f q_f=1,\ |\sum_{f:R(b_{d,k}(f))=v}q_f-c_k(v)|\le\tau$
 for all $(k,v)$, with $\tau$ the rounding half-width, is feasible.
 \end{proposition}
 ``Realizable'' here means realizable by a \emph{population mixture}
-whose rendered report lies within the closed rounding tolerance; the
-finite-sample version (integrality of $nq_f$ for a class of $n$ rows)
-is stronger and not implemented. The LP has as many variables as
-divisors of $d$ and is solved in floating point (\texttt{scipy});
-exact rational certification of feasibility is a straightforward
-addition we have not made, so at present this check is sound up to
-solver tolerance. It is class-agnostic---$q$ is free---so a consistent
+whose rendered report lies within the closed rounding tolerance
+(exactly $\pm\tfrac{1}{2000}$ for \texttt{\%.3f}); the finite-sample
+version (integrality of $nq_f$ for a class of $n$ rows) is stronger
+and not implemented. The LP has as many variables as divisors of $d$.
+It is solved in floating point, but the verdict rests only on
+certificates verified in exact rational arithmetic: a feasible point is
+rationalized and every constraint re-checked, and a report is flagged
+only on an exactly verified Farkas certificate of infeasibility
+(obtained from a second LP); if neither verifies, the report is
+accepted. The check is therefore sound unconditionally and complete up
+to solver failure. It is class-agnostic---$q$ is free---so a consistent
 relabeling passes, as Prop.~\ref{prop:imp} requires, while
 individually attainable marginals that no mixture produces (e.g.\
 $\Pr[a_p{=}d]=\tfrac12$ with $\Pr[a_{p^2}{=}\binom{d+1}{2}]=0$) are
@@ -387,12 +391,19 @@ $\Pr[\risk{h_{\mathrm{out}}}>\risk{h_0}+\epsilon]\le\delta$, and
 $\mathbb{E}[(\risk{h_{\mathrm{out}}}-\risk{h_0})_+]\le\epsilon+\delta(1-\epsilon)$.
 \end{theorem}
 \begin{proof}
-Spend $\delta/2$ on each inequality. One-sided Hoeffding on $[-1,1]$
-with a union bound over $K$ gives $\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r^H$
-for all $j$ w.p.\ $\ge1-\delta/2$; the empirical-Bernstein inequality
-of Maurer and Pontil~\cite{maurerpontil2009} (range $2$) gives the same
-with $r^B_j$ w.p.\ $\ge1-\delta/2$. On the intersection, accepted
-candidates satisfy the bound and rejection releases $h_0$.
+Assume $m\ge2$, $K\ge1$, $0<\delta<1$, and $h_0,h_1,\dots,h_K$ fixed
+(measurable, independent of $H$). Spend $\delta/2$ on each inequality.
+One-sided Hoeffding on $[-1,1]$ with a union bound over $K$ gives
+$\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r^H$ for all $j$ w.p.\
+$\ge1-\delta/2$; the empirical-Bernstein inequality of Maurer and
+Pontil~\cite{maurerpontil2009} (range $2$) gives the same with $r^B_j$
+w.p.\ $\ge1-\delta/2$. On the intersection $E$, of probability
+$\ge1-\delta$, every accepted $j$ has
+$\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r_j\le\epsilon$, and rejection
+releases $h_0$ with excess $0\le\epsilon$; this is the first claim. For
+the second, the positive excess is at most $\epsilon$ on $E$ and at
+most $1$ on $E^c$, so its expectation is at most
+$\epsilon(1-\delta)+\delta=\epsilon+\delta(1-\epsilon)$.
 \end{proof}
 
 The variance term is what makes the gate usable against a strong
@@ -633,11 +644,36 @@ fallback, zero disagreement variance) certifies at $m=2000$, as the
 Bernstein radius requires and a Hoeffding-only gate would not.
 
 \section{Related Work}
-Indirect prompt injection and compromised-agent architectures
-(MUZZLE, ACE, SAGA-BFT~\cite{nds2}) operate at the permission and
-containment boundary; we operate at the epistemic boundary---not
-whether a tool is authorized but whether what it said can be true---and
-the two compose. Anthropic's multi-agent report~\cite{anthropic2026} is the closest
+\paragraph{Reference monitors and complete mediation} The mediator of
+\S\ref{sec:layers} is a reference monitor in Anderson's
+sense~\cite{anderson1972}: every tool response passes through one
+trusted point, and Prop.~\ref{prop:repair}'s complete-mediation
+hypothesis is Saltzer and Schroeder's principle~\cite{saltzer1975}
+applied to evidence rather than to access. What is new is not the
+monitor but what it checks (arithmetic admissibility rather than
+authorization) and what it does on failure (restoration rather than
+denial). \paragraph{Prompt injection and tool-output defenses} Indirect
+prompt injection through retrieved or tool-returned content is
+established~\cite{greshake2023}. Design-level defenses such as
+CaMeL~\cite{camel2025} separate control flow from untrusted data with
+capability tracking so that injected content cannot acquire authority;
+compromised-agent architectures (SAGA-BFT, MUZZLE, ACE~\cite{nds2})
+work at the permission and containment boundary. These address
+whether untrusted content may \emph{act}; we address whether it can be
+\emph{true}, and the two compose: an authorized, capability-confined
+tool can still report an arithmetically impossible value, and none of
+these systems detects that. \paragraph{Baseline-relative certification}
+Releasing a candidate only when a fresh sample certifies it against a
+baseline is the structure of high-confidence and safe policy
+improvement~\cite{thomas2015,laroche2019}, of selective
+classification~\cite{geifman2017}, and of risk-controlling
+prediction~\cite{bates2021,angelopoulos2021}. Theorem~\ref{thm:gate}
+is an instance of that pattern with paired 0--1 losses and an
+empirical-Bernstein radius~\cite{maurerpontil2009}; we claim no new
+inequality. Our contribution is placing the gate at the exit of an
+adversarial pipeline whose upstream may be entirely compromised, and
+showing which corruption classes it is the \emph{only} layer that
+covers. Anthropic's multi-agent report~\cite{anthropic2026} is the closest
 observational counterpart. It scores lie detection against a naive
 ``trust everyone'' policy and an oracle with stipulated ground truth;
 ours is the same methodology with a derived ceiling. Its conclusion
@@ -702,7 +738,77 @@ guarantees are conditional and fallback-relative, they do not depend
 on how many agents there are or on what any of them believes, and the
 behavioral finding awaits its registered replication.
 
-\begin{thebibliography}{9}
+\appendix
+\section{Claim Ledger and Experiment Status}
+
+\begin{table*}[t]
+\centering\small
+\caption{Claim ledger: what is claimed, on what assumptions, with what
+evidence, and its current status.}
+\label{tab:ledger}
+\begin{tabular}{p{3.6cm}p{4.2cm}p{4.6cm}p{3.4cm}}
+\toprule
+claim & assumptions & evidence & status \\
+\midrule
+Attainable-value check is sound and complete for reported values outside the set &
+unramified synthetic law; renderer image & Lean theorem (\texttt{Attainable.lean}); soundness sweep on all 9 tasks & proved (arithmetic), tested (renderer) \\
+Same-prime joint realizability iff LP feasible & population mixture; closed rounding band & exact rational certificates; 3 tests & implemented; finite-sample version not \\
+Label-agnostic subverifier cannot detect consistent relabeling (Prop.~\ref{prop:imp}) &
+closure of honest set under $\pi$; zero FP & Lean (\texttt{Indistinguishability.lean}); regression test; 0/142 live &
+proved (zero-FP form); $\alpha$-form on paper only \\
+Exact repair $\Rightarrow$ clean transcript (Prop.~\ref{prop:repair}) &
+complete mediation; exact recomputation; coupled randomness; no side channels &
+Lean (\texttt{Repair.lean}); byte-equality tests on all detected fixtures &
+proved conditional; hypotheses tested on fixtures \\
+Gate: $\Pr[\text{excess}>\epsilon]\le\delta$ (Thm.~\ref{thm:gate}) &
+frozen pointwise predictors; fresh IID holdout; trusted labels/evaluator & standard inequalities; Lean deterministic clause; OC study, 0/175 released violations & proved; fallback-relative; pointwise semantics assumed \\
+Release runtime enforces the gate & single trusted process & 17 tests incl.\ mutation attack, lifecycle, IPC, timeout & implemented; executor manifest, resource limits, sink, signed audit pending \\
+Warning-only policy associated with regression on \texttt{combined} & one model, one message & pilot $n{=}5$, complete separation; orientation coding 5/5 inverted & exploratory; replication registered, running \\
+Repair associated with near-clean performance & same & pilot; repair vs flag $p=1/252$ & exploratory; not an equivalence claim \\
+Warnings \emph{harm} agents (flag $<$ unguarded) & --- & not registered & exploratory only \\
+Competent warning (\texttt{flag\_routed}) & --- & implemented, not run & pending \\
+Adaptive attack harmless to live agents; mechanism & --- & $n{=}5$/arm; two candidate anchors & descriptive; factorial designed \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Table~\ref{tab:ledger} consolidates every claim with its assumptions,
+evidence, and status. The supplementary artifact
+(\texttt{paper/satml/supplement/}) contains run-level outcomes for all
+135 pilot and adaptive-attack runs (\texttt{pilot\_runs.csv}), the
+mechanical orientation coding behind the inversion finding
+(\texttt{orientation\_coding.csv}: each returned rule is executed on
+fresh synthetic data and labeled correct/inverted/neither by whether
+it scores $>0.75$ against true or against permuted labels---flag/%
+\texttt{combined} $5/5$ inverted, repair/\texttt{combined} $5/5$
+correct, unguarded/\texttt{combined} $3$ correct, $1$ inverted, $1$
+neither), and the per-run gate refusal manifest
+(\texttt{gate\_refusals.csv}).
+
+\begin{thebibliography}{19}
+\bibitem{anderson1972} J. P. Anderson, ``Computer security technology
+planning study,'' ESD-TR-73-51, USAF Electronic Systems Division, 1972.
+\bibitem{saltzer1975} J. H. Saltzer and M. D. Schroeder, ``The
+protection of information in computer systems,'' \emph{Proc. IEEE},
+63(9), 1975.
+\bibitem{greshake2023} K. Greshake et al., ``Not what you've signed up
+for: Compromising real-world LLM-integrated applications with indirect
+prompt injection,'' \emph{AISec}, 2023.
+\bibitem{camel2025} E. Debenedetti et al., ``Defeating prompt
+injections by design,'' arXiv:2503.18813, 2025.
+\bibitem{thomas2015} P. S. Thomas, G. Theocharous, and M. Ghavamzadeh,
+``High confidence policy improvement,'' \emph{ICML}, 2015.
+\bibitem{laroche2019} R. Laroche, P. Trichelair, and R. Tachet des
+Combes, ``Safe policy improvement with baseline bootstrapping,''
+\emph{ICML}, 2019.
+\bibitem{geifman2017} Y. Geifman and R. El-Yaniv, ``Selective
+classification for deep neural networks,'' \emph{NeurIPS}, 2017.
+\bibitem{bates2021} S. Bates, A. Angelopoulos, L. Lei, J. Malik, and
+M. I. Jordan, ``Distribution-free, risk-controlling prediction sets,''
+\emph{J. ACM}, 68(6), 2021.
+\bibitem{angelopoulos2021} A. N. Angelopoulos, S. Bates, E. J.
+Cand\`es, M. I. Jordan, and L. Lei, ``Learn then test: Calibrating
+predictive algorithms to achieve risk control,'' arXiv:2110.01052, 2021.
 \bibitem{leelee2025} K.-H. Lee and S. Lee, ``Machines learn number
 fields, but how? The case of Galois groups,'' arXiv:2508.06670, 2025.
 \bibitem{anthropic2026} Anthropic Frontier Red Team, ``Patterns and

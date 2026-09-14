@@ -1,0 +1,8 @@
+arm,attack,seed,pipeline_accuracy,candidate_holdout_accuracy,fallback_holdout_accuracy,paired_loss_difference,evaluation_note
+unguarded,verification,3,0.5116666666666667,0.5,0.5,0.0,ok
+unguarded,combined,4,0.15333333333333332,0.156,0.5,0.344,ok
+flag,combined,0,0.15333333333333332,0.1425,0.5,0.3575,ok
+flag,combined,1,0.15333333333333332,0.163,0.5,0.337,ok
+flag,combined,2,0.10166666666666667,0.102,0.5,0.398,ok
+flag,combined,3,0.10166666666666667,0.1005,0.5,0.3995,ok
+flag,combined,4,0.15333333333333332,0.1435,0.5,0.3565,ok
