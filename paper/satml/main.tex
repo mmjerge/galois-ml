@@ -34,7 +34,8 @@ the correct outcome is a theorem: classification tasks from
 arithmetic statistics (Galois groups of number fields from Dedekind
 zeta coefficients) with a computable Bayes-optimal ceiling, an exact
 per-input posterior, and a decidable predicate for which observations
-are possible at all. Corruption harm becomes exact regret.
+are possible at all, so corruption harm is measured against an exactly
+defined ceiling rather than a model's judgment.
 Using it, we separate three questions that are usually conflated:
 whether corrupted evidence is \emph{detectable}, whether its effects
 can be \emph{removed}, and whether a pipeline's final artifact should
@@ -90,7 +91,11 @@ to Monte Carlo precision, a posterior defined on every
 positive-probability input, and a decidable set of \emph{attainable}
 coefficient values. The number theory is the instrument: it makes
 correctness, support violation, and label inversion independently
-checkable without a model-as-judge. We do not claim the tasks resemble
+checkable without a model-as-judge, and gives an exactly defined
+ceiling against which harm is measured (the regrets we report are
+empirical accuracies against a Monte Carlo estimate of that ceiling;
+exact conditional regret is available per supported input but is not
+the quantity in our tables). We do not claim the tasks resemble
 deployed agent workloads, and we say explicitly what does and does not
 transfer (\S\ref{sec:limits}).
 
@@ -191,8 +196,9 @@ the pushforward mass of its signature (colliding signatures summed),
 and the posterior is Bayes' rule with the uniform prior on rows of
 positive mass; rows of zero mass have no posterior and are flagged
 inadmissible. The Bayes ceiling is exactly defined by this law and
-estimated by Monte Carlo ($2\times10^5$ samples, standard error
-$\sim10^{-4}$); per-feature mutual information is computed in closed
+estimated by Monte Carlo ($2\times10^5$ Bernoulli samples of the Bayes
+decision, binomial standard error $\approx5\times10^{-4}$ at a ceiling
+of $0.95$); per-feature mutual information is computed in closed
 form from the same pushforwards. The proven quartic criterion
 classifies $200$ real LMFDB quartic fields ($100$ C$_4$, $100$
 C$_2^2$, coefficients from true decomposition data) at accuracy
@@ -218,11 +224,15 @@ Each check carries a guarantee class:
 \begin{itemize}
 \item \textbf{theorem}: \eqref{eq:euler} fixes the attainable values
 of $a_{p^k}$ for \emph{any} Galois field of degree $d$ at unramified
-primes; multiplicativity extends this to all $n$; a same-prime check
-requires one residue degree to explain all visible powers of $p$ in a
-row. Values are checked as membership in the renderer's
-\texttt{\%g}-image of the attainable set. Sound for honest generator
-output; complete against reported values outside the set.
+primes, and multiplicativity gives the per-coordinate attainable set
+of every composite $a_n$; a same-prime check requires one residue
+degree to explain all visible powers of $p$ in a row; a
+cross-coordinate check enforces $a_{mn}=a_ma_n$ on example rows where
+every involved value renders losslessly. Values are checked as
+membership in the renderer's \texttt{\%g}-image of the attainable set.
+Sound for honest generator output; complete against reported values
+outside the set. These are sound necessary checks, not a full
+row-admissibility decision (the offline audit module has one).
 \item \textbf{schema}: honest tools emit a fixed grammar; anything
 outside it (appended instructions, label/class-name inconsistency,
 forged refusals of valid requests) is flagged. Silent against
@@ -237,15 +247,17 @@ attack.
 The theorem class also includes a \emph{joint} check on marginal
 reports, which closes a gap the coordinatewise checks leave open:
 
-\begin{proposition}[Same-prime joint realizability]\label{prop:joint}
+\begin{proposition}[Same-prime closed-band realizability]\label{prop:joint}
 Fix a prime $p$ and a class. For each visible power $k$, the honest
 tool reports the class marginal of $a_{p^k}$, which is the image of
 one distribution $q$ over residue degrees $f\mid d$ under
 $f\mapsto R(b_{d,k}(f))$, where $b_{d,k}$ is \eqref{eq:euler} and $R$
-the renderer. A set of reported marginals $\{c_k\}$ is realizable by
-some mixture iff the linear program
+the renderer. Call reported marginals $\{c_k\}$ \emph{closed-band
+realizable} if some latent mixture $q$ has every rendered-value mass
+within $\tau$ of the report. This holds iff the linear program
 $q\ge0,\ \sum_f q_f=1,\ |\sum_{f:R(b_{d,k}(f))=v}q_f-c_k(v)|\le\tau$
-for all $(k,v)$, with $\tau$ the rounding half-width, is feasible.
+for all $(k,v)$ is feasible (rendering collisions are summed in the
+constraint rows).
 \end{proposition}
 ``Realizable'' here means realizable by a \emph{population mixture}
 whose rendered report lies within the closed rounding tolerance
@@ -256,9 +268,17 @@ It is solved in floating point, but the verdict rests only on
 certificates verified in exact rational arithmetic: a feasible point is
 rationalized and every constraint re-checked, and a report is flagged
 only on an exactly verified Farkas certificate of infeasibility
-(obtained from a second LP); if neither verifies, the report is
-accepted. The check is therefore sound unconditionally and complete up
-to solver failure. It is class-agnostic---$q$ is free---so a consistent
+(obtained from a second LP); if neither verifies, or the solver
+fails, the report is accepted. It is a sound infeasibility detector
+with unresolved cases passing, not an exact decision procedure.
+Duplicate rendered keys (distinct raw values sharing a \texttt{\%g}
+image) are aggregated with the band widened accordingly. The check is
+stateful across calls and transactional: a report is committed to the
+store only after it passes, and under repair the committed report is
+the honest replacement, so a rejected forgery cannot cause a later
+honest report to be flagged. What a flag establishes is that the
+accumulated evidence set is inconsistent with one sample---not, by
+itself, that the current response is the corrupt one. It is class-agnostic---$q$ is free---so a consistent
 relabeling passes, as Prop.~\ref{prop:imp} requires, while
 individually attainable marginals that no mixture produces (e.g.\
 $\Pr[a_p{=}d]=\tfrac12$ with $\Pr[a_{p^2}{=}\binom{d+1}{2}]=0$) are
@@ -328,26 +348,57 @@ gives behavior-independent \emph{containment} of the corrupt bytes;
 only repair admits a behavior-independent \emph{restoration}
 guarantee:
 
-\begin{proposition}[Clean-transcript equivalence]\label{prop:repair}
-Suppose every adversary-affected response is mediated; every altered
-response is detected and replaced by exactly the corresponding clean
-response; unaltered responses are preserved; and timing and resource
-effects are excluded from the observation model. Then under identical
-exogenous inputs and coupled agent randomness, the attacked and clean
-executions have identical agent-visible transcripts and final
-artifacts.
+\begin{proposition}[Exact mediated-execution coupling]\label{prop:repair}
+Consider a channel-attacked and a channel-clean execution with the
+\emph{same} agent programs, initial prompts, orchestration policy, and
+exogenous inputs (so any compromised agents are present in both), with
+randomness modeled by coupled tapes. Let $\mathcal R$ relate their
+trusted environment states, initially satisfied, such that whenever
+agent states and visible histories agree and environment states are
+$\mathcal R$-related: (1)~the next observable agent action is the
+same; (2)~the attacked execution's mediated response to it equals the
+clean execution's response; (3)~environment states remain
+$\mathcal R$-related afterwards; (4)~termination and artifact
+extraction agree. If no other attacker-controlled observation or state
+transition reaches the agents, then every finite visible transcript
+prefix is identical, termination occurs at the same step, and final
+artifacts are identical.
 \end{proposition}
 \begin{proof}
-Induction over interaction steps: equal histories and coupled
-randomness yield equal queries; mediation yields equal responses.
+Induction on steps; (1)--(3) preserve the invariant, (4) closes.
 \end{proof}
+Detect-and-repair establishes (2) provided recomputation uses the
+correct snapshot and request and has no divergent side effects; for
+stateless deterministic tools on a fixed snapshot, $\mathcal R$ is
+equality. Two limits are part of the statement: the reference is the
+\emph{channel-clean} execution with the same agents, so repair removes
+covered channel corruption even for badly behaved agents but does not
+turn a compromised agent into an honest one; and the conclusion is
+equality to that reference, not correctness or low risk.
 
 The proposition is conditional on complete detection and exact
 restoration; tests verify byte equality of attacked-repaired and honest
-responses on every implemented detected fixture, which establishes the
-hypothesis for those fixtures and not for arbitrary bytes. The
+responses on every implemented detected fixture, which establishes
+hypothesis (2) for those fixtures and not for arbitrary bytes. The
 \texttt{data} channels are undetected and therefore unrepaired; that
 residual is what the third layer covers.
+
+\paragraph{The three guarantees, kept separate} The layers compose
+into three statements with different characters, which we deliberately
+do not merge into one bound. (i)~\emph{Deterministic restoration}
+(Prop.~\ref{prop:repair}): for the covered channel class, the attacked
+execution equals the channel-clean reference with the same agents;
+clean-relative, not a risk statement. (ii)~\emph{Statistical release
+safety} (Thm.~\ref{thm:gate}): conditional on all pre-certification
+randomness, for arbitrary upstream corruption including all $N$ agents
+compromised and attacks outside the covered class,
+$\Pr[\risk{h_{\mathrm{out}}}>\risk{h_0}+\epsilon]\le\delta$;
+fallback-relative, per certification, with $K$ the only
+proposal-count dependence, and no bound on
+$\Pr[\text{unsafe}\mid\text{a candidate was released}]$. (iii)~\emph{Label-symmetry
+boundary} (Prop.~\ref{prop:imp}): for the label-agnostic subverifier
+only; a limit on detection, not on harm, and not on the gate's ability
+to refuse the resulting proposal.
 
 \paragraph{What is machine-checked} Four statements are formalized in
 Lean~4 without Mathlib (\texttt{lean/}, 21 theorems, no \texttt{sorry}),
@@ -376,23 +427,27 @@ checkable regardless of how the agent reasoned or how corrupt its
 evidence was.
 
 \begin{theorem}[Fresh-holdout gate]\label{thm:gate}
-Let $h_1,\dots,h_K$ be candidate predictors and $h_0$ a fallback, all
-fixed before a holdout $H=((X_i,Y_i))_{i=1}^m\sim D^m$ is drawn, with
-0--1 loss $\ell$. Let $Z_{ji}=\ell(h_j,Z_i)-\ell(h_0,Z_i)\in\{-1,0,1\}$,
+Let $\mathcal F$ contain all pre-certification randomness. Let
+$h_1,\dots,h_K$ ($K\ge1$) be candidate predictors and $h_0$ a fallback,
+all $\mathcal F$-measurable, pointwise, with identical certification
+and deployment semantics, and let $H=((X_i,Y_i))_{i=1}^m$ satisfy
+$H\mid\mathcal F\sim D^m$, $m\ge2$, with 0--1 loss $\ell$ and
+$0<\delta<1$. Let $Z_{ji}=\ell(h_j;X_i,Y_i)-\ell(h_0;X_i,Y_i)\in\{-1,0,1\}$,
 $\hat\Delta_j=\frac1m\sum_i Z_{ji}$, $V_j$ the unbiased sample
 variance of $(Z_{ji})_i$, and
 \begin{align}
 r^{H}&=\sqrt{2\log(2K/\delta)/m},\label{eq:hoeff}\\
 r^{B}_j&=\sqrt{2V_j\log(4K/\delta)/m}+\tfrac{14\log(4K/\delta)}{3(m-1)},\label{eq:bern}
 \end{align}
-$r_j=\min(r^H,r^B_j)$. Release only $h_0$ or a candidate with
-$\hat\Delta_j+r_j\le\epsilon$, $0\le\epsilon\le1$. Then
+$r_j=\min(r^H,r^B_j)$. A release rule may depend arbitrarily on $H$ but
+releases only $h_0$ or a candidate with $\hat\Delta_j+r_j\le\epsilon$,
+$0\le\epsilon\le1$. Then, conditional on $\mathcal F$ and hence
+unconditionally,
 $\Pr[\risk{h_{\mathrm{out}}}>\risk{h_0}+\epsilon]\le\delta$, and
 $\mathbb{E}[(\risk{h_{\mathrm{out}}}-\risk{h_0})_+]\le\epsilon+\delta(1-\epsilon)$.
 \end{theorem}
 \begin{proof}
-Assume $m\ge2$, $K\ge1$, $0<\delta<1$, and $h_0,h_1,\dots,h_K$ fixed
-(measurable, independent of $H$). Spend $\delta/2$ on each inequality.
+Work conditionally on $\mathcal F$. Spend $\delta/2$ on each inequality.
 One-sided Hoeffding on $[-1,1]$ with a union bound over $K$ gives
 $\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r^H$ for all $j$ w.p.\
 $\ge1-\delta/2$; the empirical-Bernstein inequality of Maurer and
@@ -402,22 +457,32 @@ $\ge1-\delta$, every accepted $j$ has
 $\risk{h_j}-\risk{h_0}\le\hat\Delta_j+r_j\le\epsilon$, and rejection
 releases $h_0$ with excess $0\le\epsilon$; this is the first claim. For
 the second, the positive excess is at most $\epsilon$ on $E$ and at
-most $1$ on $E^c$, so its expectation is at most
-$\epsilon(1-\delta)+\delta=\epsilon+\delta(1-\epsilon)$.
+most $1$ on $E^c$, and $\Pr(E^c)\le\delta$, so its expectation is at
+most $\epsilon+\delta(1-\epsilon)$. Average over $\mathcal F$.
 \end{proof}
+Repeated certifications each carry their own $\delta$; a campaign of
+$T$ releases has failure probability at most $\sum_t\delta_t$, and
+re-certifying until something passes is not covered.
 
 The variance term is what makes the gate usable against a strong
 fallback. Paired 0--1 differences are mostly zero when the two
-predictors are close, so $V_j\ll1$ and $r^B\ll r^H$. With $K{=}1$,
-$\delta{=}0.05$, $m{=}2000$: $r^H=\sqrt{2\ln 40/2000}=0.061$, while
-for a genuine agent rule at $\approx0.92$ against the theorem fallback
-at $0.951$ (sextic, disagreement on $\approx8\%$ of rows)
-$r^B\approx0.022$, and the rule certifies at $\epsilon=0.05$. Under a
-Hoeffding-only gate the same rule is refused at $m=2000$ and, by the
-standard power calculation, needs $m\gtrsim6\times10^4$ for
-high-probability acceptance. Every gate number in this paper is from
-the rule as stated (min of the two radii, $K$ given per experiment);
-\S\ref{sec:gateoc} reports both gates side by side.
+predictors are close, so $V_j\ll1$ and $r^B\ll r^H$. A worked
+instance, with the paired counts that determine everything: a genuine
+agent rule (sextic, clean pilot run) against the theorem fallback on
+one fresh $m{=}2000$ holdout gives $(n_+,n_0,n_-)=(72,1906,22)$, i.e.\
+disagreement on $4.7\%$ of rows, $\hat\Delta=0.025$, $V=0.046$
+(holdout accuracies $0.9345$ vs.\ $0.9595$). With $K{=}1$,
+$\delta{=}0.05$: $r^H=\sqrt{2\ln40/2000}=0.0607$ and
+$r^B=\sqrt{2\cdot0.046\ln80/2000}+14\ln80/(3\cdot1999)=0.0245$, a
+$2.5\times$ reduction, and $\hat\Delta+r^B=0.0495\le\epsilon=0.05$: the
+rule certifies, narrowly. Under a Hoeffding-only gate it is refused; a
+range-only \emph{sufficient} sample size for $95\%$ acceptance of a
+candidate with excess $\Delta=0.031$ is
+$m\ge[\sqrt{2\ln(2K/\delta)}+\sqrt{2\ln 20}]^2/(\epsilon-\Delta)^2
+\approx7.4\times10^4$; the actual power under the ternary law is
+higher and this is not a necessity claim. Every gate number in this
+paper is from the rule as stated (min of the two radii, $K$ given per
+experiment); \S\ref{sec:gateoc} reports both gates side by side.
 
 The bound has no factor in the number of agents $N$ or the number of
 compromised agents $k\le N$: all agents may be compromised and submit
@@ -458,8 +523,10 @@ $n=5$ per condition; arms run sequentially. Median accuracy
 \begin{table}[t]
 \centering\small
 \caption{Pilot: same detector, three policies. Median accuracy,
-$n=5$/cell, sextic (ceiling $0.9518$). Exact one-sided permutation
-$p$ on accuracy sums, unpaired; nominal and exploratory.}
+$n=5$/cell except flag/\texttt{data} ($n=4$; one API failure,
+retained in the supplement), sextic (ceiling $0.9518$). Exact
+one-sided permutation $p$ on accuracy sums, unpaired; nominal and
+exploratory---sequential arms do not establish exchangeability.}
 \label{tab:threearm}
 \begin{tabular}{lccccc}
 \toprule
@@ -635,11 +702,13 @@ $0.079$, $0.159$ & $0/30$ & $0/30$ & --- \\
 \end{center}
 
 With 30 replicates a $30/30$ cell has a $95\%$ Clopper--Pearson lower
-bound of $0.88$ and a $0/30$ cell an upper bound of $0.12$. Acceptance
-is complete well inside the budget, degrades as $\Delta$ approaches
-the effective threshold $\epsilon-r$, and is zero at and beyond
-$\epsilon$; no released artifact exceeded $\epsilon$ excess by the
-independent estimate. The $\Delta{=}0$ row (candidate identical to the
+bound of $0.88$ and a $0/30$ cell an upper bound of $0.12$. In the observed cells, acceptance is complete well inside the budget,
+degrades as $\Delta$ approaches the effective threshold $\epsilon-r$,
+and is zero in every cell with $\Delta>\epsilon$ (no cell sits exactly
+at $\epsilon$); no released artifact exceeded $\epsilon$ excess by the
+independent estimate. These are per-certification results at $K{=}1$;
+they do not bound the probability that \emph{some} certification in
+the campaign was unsafe, which is $\le\sum\delta_t$. The $\Delta{=}0$ row (candidate identical to the
 fallback, zero disagreement variance) certifies at $m=2000$, as the
 Bernstein radius requires and a Hoeffding-only gate would not.
 
@@ -658,11 +727,12 @@ established~\cite{greshake2023}. Design-level defenses such as
 CaMeL~\cite{camel2025} separate control flow from untrusted data with
 capability tracking so that injected content cannot acquire authority;
 compromised-agent architectures (SAGA-BFT, MUZZLE, ACE~\cite{nds2})
-work at the permission and containment boundary. These address
-whether untrusted content may \emph{act}; we address whether it can be
-\emph{true}, and the two compose: an authorized, capability-confined
-tool can still report an arithmetically impossible value, and none of
-these systems detects that. \paragraph{Baseline-relative certification}
+work at the permission and containment boundary. These systems
+principally constrain the \emph{authority} of untrusted content; our
+checks constrain specified arithmetic properties of tool evidence,
+which are necessary (not sufficient) for its truth. The protections
+are complementary: capability confinement alone does not establish
+those properties. \paragraph{Baseline-relative certification}
 Releasing a candidate only when a fresh sample certifies it against a
 baseline is the structure of high-confidence and safe policy
 improvement~\cite{thomas2015,laroche2019}, of selective
@@ -673,29 +743,47 @@ empirical-Bernstein radius~\cite{maurerpontil2009}; we claim no new
 inequality. Our contribution is placing the gate at the exit of an
 adversarial pipeline whose upstream may be entirely compromised, and
 showing which corruption classes it is the \emph{only} layer that
-covers. Anthropic's multi-agent report~\cite{anthropic2026} is the closest
-observational counterpart. It scores lie detection against a naive
-``trust everyone'' policy and an oracle with stipulated ground truth;
-ours is the same methodology with a derived ceiling. Its conclusion
-that models ``abstractly understand that information sources have
-their own incentives'' but lack ``a disposition to act on that
-knowledge without prompting'' is our design premise: our flag-policy
-result is a controlled instance of the gap (agents handed a proof of
-corruption did not act on it), and repair and gating are enforcement
-that does not route through disposition. Its observation that agents
-colluded ``to the penny via a public listings board'' after every
-direct channel was removed is an empirical instance of the boundary
-we state formally: coordination through admissible outputs is not
-preventable by content verification. Its conformity findings ($18/30$
-agents choosing an identical branch name) are qualitatively consistent
-with our earlier observation, on the same testbed, that the errors of
-five independently run agents overlapped $14$--$26\times$ more than
-independence predicts (Jaccard overlap of test-set error sets versus
-the product of error rates; details in the repository); that
-observation motivates agent-count-independent guarantees and is a
-premise of no proof here, and the two measures are not directly
-comparable. We do not address its
-coordination-quality, goal-conflict, or resource-flooding findings. Lee and Lee~\cite{leelee2025} established the arithmetic
+covers. \paragraph{Behavioral studies of multi-agent systems} Anthropic's
+\emph{Patterns and problems in multiagent systems}~\cite{anthropic2026}
+provides observational context through studies of trust, conformity,
+and coordination. Its lie-detection evaluation and ours share a
+comparison pattern: agent behavior is assessed against a credulous
+policy and a ground-truth benchmark. The tasks, information
+structures, and benchmark semantics differ; our setting additionally
+permits analytic ground truth and formal bounds. The report concludes
+that models may understand source incentives yet lack ``a disposition
+to act on that knowledge without prompting.'' We take this as
+motivation for a narrower architectural question: which assurances can
+be enforced without relying on upstream agents' judgment? Our repair
+mechanism and release gate enforce distinct evidence and release
+conditions under explicit trust and sampling assumptions. They do not
+establish improved coordination, incentive alignment, or information
+pooling. Its conformity observations are qualitatively consistent with
+our earlier measurement, on this testbed, that the error sets of five
+independently run agents overlapped $14$--$26\times$ more than the
+Jaccard index implied by independent errors at their rates
+($pq/(p+q-pq)$); the two measure different phenomena, and that
+measurement motivates but is not a premise of the agent-count-independent
+guarantees.
+
+\paragraph{Discussion: enforcement rather than discretionary response}
+Our response to the disposition gap is deliberately limited. Where a
+tool-evidence property admits a tractable, sound check from trusted
+inputs, the corresponding assurance need not depend on an agent
+noticing a warning or choosing to honor it. The release gate provides a
+separate, statistical guarantee relative to a baseline; it does not
+guarantee detection of every harmful candidate. Disposition
+independence therefore concerns enforcement at the trusted boundaries,
+not the behavior or integrity of the entire system. The report's
+observation of price matching through a public listings board after
+direct communication was removed illustrates a related limitation:
+task outputs can remain a medium for coordination. Our formal boundary
+applies to the specified verifier and its admissible or
+observationally indistinguishable output class; we do not establish
+that the report's experiment satisfies those hypotheses, nor claim that
+content verification prevents collusion. Likewise, repairing tool
+evidence does not itself ensure that agents elicit, transmit, or use
+pivotal private information. Lee and Lee~\cite{leelee2025} established the arithmetic
 criteria we use as ground truth. Selective classification and
 fallback-relative certification are standard; our contribution is
 their composition with mediation and repair, and the separation of

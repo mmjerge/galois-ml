@@ -165,25 +165,33 @@ failure patterns across coordination, conformity, epistemics, and
 goal conflict. Ours is constructive on one slice of it. The
 correspondences, with the honest gap on each:
 
-| Their observation | Our result | Relationship |
-|---|---|---|
-| Closing thesis: models "abstractly understand that information sources have their own incentives ... What is missing is a disposition to act on that knowledge without prompting." | Flag policy: agents handed an explicit proof that evidence was false acknowledged it in 0/5 runs and did worse than unguarded. Repair and gate enforce without routing through disposition. | **Direct corroboration, and our design premise.** Their diagnosis is that the disposition is missing; our position is that a decidable check should not be assigned to a disposition at all. |
-| Lie-detection: listener scored against a "trust everyone" naive policy and an oracle; "learn who lies" baseline excludes a source once contradicted by two others. | Our `credulous` role is the same naive policy; the ceiling is a theorem rather than a scripted oracle; our scouts experiments mirror the setup. | Same methodology; ours has a computable ceiling and unlimited instances. Their liar is stipulated; ours is derived. |
-| "In principle detectable ... since a false report will eventually contradict an honest one" yet models underperform. | `impossible` channel: refutable from ONE tool output given facts in the brief; 0% agent detection across six generations; 100% deterministic detection. | Corroboration with a sharper instrument: detectability is exact, not eventual. |
-| Conformity: 18/30 agents chose the identical branch name; agents "fail together." | 5 agents = 1.05 effective independent agents; errors 14--113x more correlated than independence. | Corroboration, quantified. Their implication ("isolated problems become systemic") is why our guarantees are N-independent. |
-| Collusion persisted with all direct channels removed: agents "price-matched to the penny via a public listings board." | Our boundary result: coordination through legitimate, admissible task outputs cannot be prevented by content verification (the multi-agent analogue of label-permutation indistinguishability). | **Their empirical instance of our theoretical boundary.** Schema/type verification does not close it; we say so rather than claim otherwise. |
-| Job-queue flooding: 2.4M requests, 117 accepted. | Out of scope: resource exhaustion; our runtime bounds wall clock only. | Honest non-overlap. Their finding is a reason our availability caveats matter. |
-| Turf war: agents sabotage peers with self-replicating malware, disable accounts, camouflage processes. | `saboteur` condition (compromised pipeline member); release gate tolerates ALL N agents compromised for the released-risk bound. | Partial: we bound the released artifact's risk, not the agents' conduct toward each other or the host. Containment is SAGA/MUZZLE territory. |
-| Hidden-profile: groups converge on shared evidence, discount the pivotal dissenter; "turning a simple dial ... will exacerbate the other." | Our layering is exactly a refusal to turn one dial: deterministic checks where decidable, gating where not, no global trust setting. | Alignment of design philosophy; we have no hidden-profile experiment. |
-| Their prescription: mechanisms that "restructure the incentives around communication so that miscalibrated trust, in either direction, is caught and corrected." | Repair (caught and corrected, deterministically) and the gate (caught at release regardless of trust). | Our architecture is one such mechanism for the tool-evidence slice. |
+Rows revised to the strengths an external audit of this mapping
+(`experiments/outputs/alignment_response.md`, 2026-09-13) would accept;
+the audit downgraded three rows that overclaimed ("direct
+corroboration", "same methodology", "their empirical instance of our
+boundary").
 
-What we should NOT claim from this alignment: that we address
-coordination quality, goal conflict, or collusion; that our tasks
-resemble theirs in realism; or that corroboration of the disposition
-gap on a synthetic instrument replicates their findings. What we can
-claim: their report identifies a gap ("disposition to act"), and our
-paper is a constructive answer to one part of it that provably does
-not depend on the gap being closed.
+| Their observation | Our result | Relationship (audited strength) |
+|---|---|---|
+| Closing thesis: models lack "a disposition to act on that knowledge without prompting." | Flag policy: in 5 runs agents did not explicitly acknowledge the supplied proof of corruption, and observed performance was worse than unguarded. | **Qualitative consistency and a scoped design response.** Consistent with a gap between making corrective evidence available and obtaining appropriate behavior; does not identify their mechanism (attention, comprehension, or format could explain non-acknowledgment). Our architecture enforces evidence and release conditions outside agent discretion instead. |
+| Lie-detection: listener vs "trust everyone" naive policy and an oracle. | `credulous` role instantiates the same trust-all rule; our ceiling is a proved bound on Bayes accuracy under the synthetic law. | **Shared baseline-comparison pattern**, not the same methodology: source models, information structure, and benchmark semantics differ. A procedurally generated instance family, not "unlimited instances". |
+| Lies "in principle detectable" yet models underperform. | `impossible` channel: refutable from one tool response plus facts in the brief; 0 agent detections across the tested runs and six generations; the deterministic checker detected all tested instances and is complete for this class by construction. | **Controlled analogue with stronger detectability assumptions.** Isolates a narrower failure (local arithmetic invariant vs cross-source contradiction). |
+| 18/30 agents chose the identical branch name. | Error sets of 5 independently run agents overlap 14--26x the Jaccard implied by independent errors at their rates, pq/(p+q-pq). | **Qualitative parallel in dependence across agents**; concentrated choice and joint failure are different phenomena. Motivates avoiding independence assumptions; not a premise of the N-independent guarantee, which comes from the proofs. |
+| Collusion via public listings board after direct channels removed. | Boundary: a verifier that checks only the specified admissibility predicate does not exclude coordination implemented within its accepted output class. | **Illustration of a related residual-channel limitation.** We do not establish that their experiment satisfies our theorem's hypotheses; prices are payoff-relevant actions, not a label-permutation signaling channel. |
+| Job-queue flooding. | Out of scope. | **Non-overlap.** Our timeout bounds individual runs under infrastructure assumptions; it does not establish availability under flooding. |
+| Turf wars, malware, account lockouts. | Release bound permits arbitrary outputs from all N upstream agents given an intact trusted gate/evaluator/release path. | **Partial overlap in adversarial upstream behavior.** Bounds the released artifact relative to the baseline; does not bound host actions, peer interference, resource use, or pre-release damage. |
+| Hidden profiles; "a simple dial" cannot fix both failures. | Separate checks on tool evidence from certification of a candidate, rather than one agent-level trust policy. | **Design-level compatibility, without direct evidence.** We have not tested elicitation or use of pivotal private information. |
+| Prescription: restructure communication incentives so miscalibrated trust is caught and corrected. | Repair restores supported evidence under its assumptions; gating gives a statistical assurance on released candidates. | **Complementary mechanism, not an implementation of the incentive prescription.** Enforcement is not incentive restructuring; we do not claim to realign agents' incentives. |
+
+The asymmetry to preserve: their observations motivate our engineering
+choice; our results establish a restricted enforcement claim. Neither
+validates the other's full mechanism, scope, or theory. Cheapest
+genuinely new experiment per the audit: an honest hidden-profile test
+(one agent holds a decisive, valid tool output; measure the whole
+information path -- computed / transmitted / available / used --
+against a common-information control), which tests something our
+corruption experiments do not: loss of valid private evidence with no
+one compromised.
 
 ## Summary of the claim we are willing to defend
 

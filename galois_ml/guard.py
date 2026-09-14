@@ -212,6 +212,44 @@ _RULE_ERROR = re.compile(r"rule failed to execute: .*", re.DOTALL)
 _A_TERM = re.compile(rf"a_(\d+)=({_VAL})")
 
 
+def _split_coprime(n: int):
+    """n = m * p^a with p the smallest prime factor and gcd(m, p) = 1;
+    returns (m, p, a), or (None, None, None) if n is 1 or a prime power
+    (nothing to check)."""
+    fac = _prime_power_factorization(n)
+    if len(fac) < 2:
+        return None, None, None
+    p, a = fac[0]
+    return n // p**a, p, a
+
+
+def _lossless_int(s: str) -> bool:
+    """Does this %g-rendered string denote an integer exactly? True for
+    plain digit strings below 10^6 (six significant digits)."""
+    return s.isdigit() and len(s) <= 6
+
+
+def _parse_marginal(body: str) -> dict:
+    """Parse '{v: p, v: p, ...}' body into {rendered_value: (Fraction
+    summed frequency, raw entry count)}.
+
+    Duplicate rendered keys are AGGREGATED, not overwritten: the honest
+    renderer computes frequencies of distinct raw coefficients and then
+    renders each with %g, so two distinct raw values (e.g. 3108105 and
+    3108100) can legitimately share a rendered key. Overwriting lost
+    probability mass and could flag honest reports (external review,
+    B3). The count is kept so the rounding band can widen accordingly.
+    """
+    from fractions import Fraction
+
+    out: dict = {}
+    for e in body.split(", "):
+        v, pr = e.rsplit(": ", 1)
+        f, c = out.get(v, (Fraction(0), 0))
+        out[v] = (f + Fraction(pr), c + 1)
+    return out
+
+
 @dataclass
 class GuardViolation:
     """One deterministic verification failure."""
@@ -430,7 +468,13 @@ class ToolGuard:
                     )
         detail = self._record_and_check_joint(n, labels, bodies)
         if detail:
-            return self._fail(tool, "joint_realizability", THEOREM, detail, text)
+            out = self._fail(tool, "joint_realizability", THEOREM, detail, text)
+            # under repair the agent received the honest text: commit that
+            if self.policy == "repair" and out != text and "[GUARD]" not in out:
+                self._pending_joint = (n, None, None)
+                self._commit_joint(out)
+            return out
+        self._commit_joint(text)
         return text
 
     # -- joint realizability of marginal reports (stateful) ---------------
@@ -463,23 +507,53 @@ class ToolGuard:
         if len(fac) != 1:
             return None
         p, k = fac[0]
-        store = self._joint.setdefault(p, {})
+        # TRANSACTIONAL: check against a tentative copy; commit only via
+        # _commit_joint after the response has passed (or been repaired
+        # to the honest text). An earlier draft stored the report before
+        # checking, so a rejected forgery poisoned the state and a later
+        # HONEST report was flagged against it (external review, B5).
+        tentative = {lab: dict(v) for lab, v in self._joint.get(p, {}).items()}
         for label, body in zip(labels, bodies):
-            entries = [e.rsplit(": ", 1) for e in body.split(", ")]
-            store.setdefault(label, {})[k] = {v: float(pr) for v, pr in entries}
-        for label, by_k in store.items():
+            tentative.setdefault(label, {})[k] = _parse_marginal(body)
+        for label, by_k in tentative.items():
             if len(by_k) < 2:
                 continue
             if not self._jointly_realizable(by_k):
                 ks = sorted(by_k)
+                # attribution: the evidence SET is inconsistent; which
+                # member is corrupt is not decided here (if an earlier
+                # undetected forgery is stored, the newest honest report
+                # is the one that trips the check)
                 return (
-                    f"For class {label}, the reported marginals of "
-                    f"a_(p^k) for p={p}, k in {ks} are individually "
-                    f"attainable but no single distribution over residue "
-                    f"degrees realizes all of them (same-prime joint "
-                    f"realizability LP infeasible)."
+                    f"For class {label}, the accumulated reported "
+                    f"marginals of a_(p^k) for p={p}, k in {ks} are "
+                    f"individually attainable but no single distribution "
+                    f"over residue degrees realizes all of them: the "
+                    f"evidence set is inconsistent with one sample "
+                    f"(exact Farkas certificate). This flags the set, "
+                    f"not necessarily this response."
                 )
+        self._pending_joint = (p, k, [(lab, _parse_marginal(b))
+                                      for lab, b in zip(labels, bodies)])
         return None
+
+    def _commit_joint(self, text: str) -> None:
+        """Commit the marginals of the text the agent actually RECEIVED
+        (honest, or the trusted repair) to the joint store."""
+        pend = getattr(self, "_pending_joint", None)
+        self._pending_joint = None
+        if pend is None:
+            return
+        m = _DIST_HEAD.fullmatch(text)
+        if not m:
+            return
+        p, k, _ = pend
+        for seg in m.group(2).split(" | "):
+            sm = _DIST_SEGMENT.fullmatch(seg)
+            if sm:
+                self._joint.setdefault(p, {}).setdefault(sm.group(1), {})[k] = (
+                    _parse_marginal(sm.group(2))
+                )
 
     def _jointly_realizable(self, by_k: dict[int, dict[str, float]]) -> bool:
         """Exact decision, fail-safe toward acceptance.
@@ -502,6 +576,12 @@ class ToolGuard:
         Constraints are built in rationals from the reported %.3f
         strings, so the tolerance band is exact.
         """
+        try:
+            return self._jointly_realizable_inner(by_k)
+        except Exception:
+            return True  # numerical/solver trouble: accept (fail-safe)
+
+    def _jointly_realizable_inner(self, by_k) -> bool:
         from fractions import Fraction
 
         from scipy.optimize import linprog
@@ -518,9 +598,12 @@ class ToolGuard:
             ]
             for v in set(rendered) | set(freqs):
                 row = [Fraction(1) if r == v else Fraction(0) for r in rendered]
-                target = Fraction(str(freqs.get(v, 0.0))) if v in freqs else Fraction(0)
-                A.append(row); b.append(target + half)
-                A.append([-x for x in row]); b.append(-(target - half))
+                # freqs[v] = (summed frequency, number of raw entries that
+                # rendered to v); the rounding band widens with the count,
+                # since each raw entry carried its own rounding
+                target, cnt = freqs.get(v, (Fraction(0), 1))
+                A.append(row); b.append(target + half * cnt)
+                A.append([-x for x in row]); b.append(-(target - half * cnt))
         for i in range(nvar):  # 0 <= q_i <= 1
             A.append([Fraction(-1) if j == i else Fraction(0) for j in range(nvar)]); b.append(Fraction(0))
             A.append([Fraction(1) if j == i else Fraction(0) for j in range(nvar)]); b.append(Fraction(1))
@@ -660,6 +743,25 @@ class ToolGuard:
                         f"attainable but no single decomposition type "
                         f"produces all of them.", text,
                     )
+            # cross-coordinate multiplicativity, checked only where every
+            # involved value renders losslessly (%g is exact for integers
+            # below 10^6), so no rounded value is ever multiplied
+            # (external review, E1: a_2=6, a_3=6, a_6=0 was accepted)
+            vals = {int(ns): vs for ns, vs in _A_TERM.findall(m.group(3))}
+            for n_c, vs in vals.items():
+                for (mm, pp, aa) in [_split_coprime(n_c)]:
+                    if mm is None or mm not in vals or pp**aa not in vals:
+                        continue
+                    trio = (vs, vals[mm], vals[pp**aa])
+                    if not all(_lossless_int(t) for t in trio):
+                        continue
+                    if int(float(vs)) != int(float(vals[mm])) * int(float(vals[pp**aa])):
+                        return self._fail(
+                            tool, "multiplicativity", THEOREM,
+                            f"a_{n_c} = {vs} but a_{mm} * a_{pp**aa} = "
+                            f"{int(float(vals[mm])) * int(float(vals[pp**aa]))}; "
+                            f"coefficients are multiplicative.", text,
+                        )
         return text
 
     def filter_validation(self, text: str, code: str) -> str:

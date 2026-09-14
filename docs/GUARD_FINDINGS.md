@@ -861,3 +861,68 @@ monitors, prompt-injection defenses, baseline-relative certification,
 risk-controlling prediction); release of run-level pilot data and
 transcript coding as a supplementary artifact; a consolidated
 claim ledger (claim / assumptions / evidence / component / status).
+
+## 14. Seventh and eighth external reviews (mathematics audit; alignment audit, 2026-09-13)
+
+Full texts: `experiments/outputs/math_response.md`,
+`experiments/outputs/alignment_response.md`.
+
+**Mathematics audit.** Constants and union-bound bookkeeping in
+Theorem 1 confirmed correct (2K in Hoeffding, 4K in Bernstein; the
+holdout's own variance is licensed; min over the two events valid).
+Verified and fixed:
+
+- **Bernstein worked example was wrong in its prose.** I had written
+  "disagreement on ~8% of rows" with r^B = 0.022; those are
+  incompatible. Actual paired counts on the example holdout:
+  (n+, n0, n-) = (72, 1906, 22), disagreement 4.7%, D_hat = 0.025,
+  V = 0.046, r^B = 0.0245 at delta/2 (my 0.022 used the unsplit
+  delta), r^H = 0.0607; the rule certifies at 0.0495 <= 0.05,
+  narrowly. Paper now publishes the counts. "Needs ~66k" replaced by
+  a stated range-only SUFFICIENT bound (~74k under the split budget)
+  with the note that actual ternary power is higher.
+- **Joint-state poisoning (B5).** The joint store recorded a report
+  BEFORE checking it, so a rejected forgery could cause a later honest
+  report to be flagged. Now transactional: commit only after passing;
+  under repair, commit the honest replacement. Regression test with
+  the reviewer's construction.
+- **Duplicate rendered keys (B3)** were overwritten; the honest
+  renderer can emit them (distinct raw values sharing a %g image). Now
+  aggregated with the rounding band widened by the entry count.
+- **Cross-coordinate multiplicativity (E1)**: `a_2=6, a_3=6, a_6=0` was
+  accepted by the example-row guard. Now checked where every involved
+  value renders losslessly (integers < 10^6); regression test.
+- LP wrapped in try/except (accept on solver failure); documented as a
+  sound infeasibility detector with unresolved cases passing, not an
+  exact decision procedure; a flag establishes the evidence SET is
+  inconsistent, not that the current response is the corrupt one.
+- Paper: Prop 2 restated as an explicit coupling with the same agent
+  programs (compromised agents included in the reference execution);
+  Prop 3 renamed closed-band realizability; Theorem 1 statement
+  carries m>=2, K>=1, delta in (0,1), F-measurable pointwise
+  predictors, conditional freshness, the selection rule, and the
+  campaign-level sum-of-deltas caveat; the three guarantees stated
+  separately with their fallback-relative/clean-relative character;
+  "exact regret" reworded; Jaccard baseline described correctly
+  (pq/(p+q-pq), which `conformity.py` already used); MC standard error
+  corrected to ~5e-4; n=4 cell in the table caption.
+
+Not done from the math audit: an exact-ternary (multinomial) gate as
+an independently specified comparator; finite-sample integer
+realizability; conservative interval enclosure for the gate's float
+arithmetic; verifying the parser's collision handling against the
+live renderer end-to-end (the aggregation fix addresses the mechanism;
+a renderer-level regression would pin it).
+
+**Alignment audit.** Three of nine rows in the Anthropic mapping
+overclaimed; all nine rewritten to audited strength in
+`docs/POSITIONING.md` sec 4 and the paper's related work and
+discussion paragraphs replaced with the reviewer's accepted text
+(asymmetric: their observations motivate our engineering choice; our
+results establish a restricted enforcement claim). The collusion
+analogy is now "illustration of a related residual-channel
+limitation", with the boundary narrowed to "a verifier that checks
+only the specified admissibility predicate does not exclude
+coordination implemented within its accepted output class". Proposed
+new experiment: an honest hidden-profile test measuring the whole
+information path with no one compromised.

@@ -645,3 +645,60 @@ def test_joint_realizability_is_exact_on_a_feasible_forgery(bench_sextic):
     assert guard.filter_distribution(a2, 2) == a2
     assert guard.filter_distribution(a4, 4) == a4
     assert not guard.detected
+
+
+# -- sixth-review (math audit) regressions -------------------------------------
+
+def test_joint_state_is_transactional_and_repair_commits_honest(bench_sextic):
+    """Review B5: a rejected forgery must not poison the joint store, so a
+    later HONEST report is not flagged against it; under repair the
+    committed state is the honest replacement."""
+    from galois_ml.multi_agent import coefficient_distribution
+
+    c0, c1 = bench_sextic.class_names
+    for policy in ("flag", "repair"):
+        guard = ToolGuard(
+            degree=6, n_coeffs=bench_sextic.X_train.shape[1],
+            class_names=bench_sextic.class_names,
+            recompute_distribution=lambda n: coefficient_distribution(
+                bench_sextic, n
+            ),
+            policy=policy,
+        )
+        honest2 = coefficient_distribution(bench_sextic, 2)
+        assert guard.filter_distribution(honest2, 2) == honest2
+        forged4 = (f"a_4 distribution by class -- {c0}: {{0: 0.500, 21: 0.500}}"
+                   f" | {c1}: {{0: 0.500, 21: 0.500}}")
+        out = guard.filter_distribution(forged4, 4)
+        assert guard.detected
+        if policy == "repair":
+            assert out == coefficient_distribution(bench_sextic, 4)
+        n_before = len(guard.violations)
+        # the honest a_8 report must NOT be flagged against the forgery
+        honest8 = coefficient_distribution(bench_sextic, 8)
+        assert guard.filter_distribution(honest8, 8) == honest8
+        assert len(guard.violations) == n_before
+
+
+def test_duplicate_rendered_keys_are_aggregated():
+    from galois_ml.guard import _parse_marginal
+    from fractions import Fraction
+
+    m = _parse_marginal("0: 0.500, 3.1081e+06: 0.300, 3.1081e+06: 0.200")
+    assert m["3.1081e+06"] == (Fraction("0.500"), 2)
+    assert m["0"] == (Fraction("0.500"), 1)
+
+
+def test_cross_coordinate_multiplicativity_in_examples(bench_sextic):
+    """Review E1: a_2=6, a_3=6, a_6=0 is coordinatewise attainable and
+    same-prime consistent, yet violates a_6 = a_2 * a_3."""
+    guard = make_sextic_guard(bench_sextic)
+    c0 = bench_sextic.class_names[0]
+    forged = f"label 0 ({c0}): a_2=6, a_3=6, a_6=0"
+    out = guard.filter_examples(forged, 0)
+    assert "[GUARD]" in out
+    assert guard.violations[-1].check == "multiplicativity"
+    # and the consistent row passes
+    guard2 = make_sextic_guard(bench_sextic)
+    honest = f"label 0 ({c0}): a_2=6, a_3=6, a_6=36"
+    assert guard2.filter_examples(honest, 0) == honest
