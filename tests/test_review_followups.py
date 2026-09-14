@@ -170,3 +170,26 @@ def test_guard_soundness_sweep(task):
         honest = coefficient_distribution(bench, n)
         assert guard.filter_distribution(honest, n) == honest, (task, n)
     assert not guard.detected
+
+
+@pytest.mark.parametrize("task", sorted(TASKS))
+def test_honest_marginals_never_have_duplicate_rendered_keys(task):
+    """Renderer-level guarantee behind the joint check's duplicate-key
+    aggregation: for every task and every prime power <= N, the
+    attainable values render to DISTINCT %g strings, so an honest class
+    marginal never contains two entries with the same rendered key.
+    (Aggregation is still implemented, but this shows it is never
+    exercised by honest output -- duplicates are a forgery signature.)"""
+    from galois_ml.guard import attainable_prime_power_values
+
+    degree = GROUPS[TASKS[task][0]].order
+    N = 1000
+    from galois_ml.zeta import _factor_table
+    _, decomp = _factor_table(N)
+    for n in range(2, N + 1):
+        m, p, k = decomp[n]
+        if m != 1:
+            continue
+        vals = attainable_prime_power_values(degree, k)
+        rendered = [f"{float(v):g}" for v in vals]
+        assert len(set(rendered)) == len(rendered), (task, n, rendered)

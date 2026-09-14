@@ -201,3 +201,42 @@ def test_decision_is_auditable():
                 "delta_per_candidate", "n_candidates", "fallback_kind",
                 "certificate"):
         assert key in out
+
+
+# -- exact enclosure and exact-ternary comparator ------------------------------
+
+def test_release_uses_exact_counts_and_conservative_margin():
+    """The decision is made in exact rationals from integer paired counts,
+    with the float margin inflated; floating point can only make the
+    gate stricter."""
+    y = np.zeros(2000, dtype=int)
+    fb = np.zeros(2000, dtype=int)
+    cand = np.zeros(2000, dtype=int)
+    cand[:72] = 1                         # 72 candidate-wrong rows
+    fb2 = fb.copy(); fb2[1978:] = 1       # 22 fallback-wrong rows
+    d = certify_release(cand, fb2, y, epsilon=0.05, delta=0.05)
+    assert d.paired_counts == (72, 1906, 22)
+    assert d.paired_loss_difference == pytest.approx(0.025)
+    assert d.bound_used == "bernstein"
+    assert d.released == "candidate"      # 0.025 + 0.0245 <= 0.05
+
+
+def test_exact_ternary_comparator_behaviour():
+    from galois_ml.gate import clopper_pearson_upper, exact_ternary_pvalue
+
+    # unrestricted nuisance: high-variance sup discards the low
+    # disagreement rate; does NOT certify the worked example
+    p_free = exact_ternary_pvalue(72, 1906, 22, 0.05, rho_grid=10)
+    assert p_free > 0.05
+    # with rho bounded first, the exact test is far more powerful
+    rU = clopper_pearson_upper(94, 2000, 0.025)
+    assert 0.05 < rU < 0.07
+    p_bounded = exact_ternary_pvalue(72, 1906, 22, 0.05, rho_grid=10,
+                                     rho_upper=rU)
+    assert p_bounded < 1e-4
+    # monotone: a worse candidate gets a larger p
+    p_worse = exact_ternary_pvalue(90, 1888, 22, 0.05, rho_grid=10,
+                                   rho_upper=clopper_pearson_upper(112, 2000, 0.025))
+    assert p_worse > p_bounded
+    with pytest.raises(ValueError):
+        exact_ternary_pvalue(1, 1, 1, -0.1)

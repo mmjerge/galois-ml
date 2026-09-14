@@ -61,6 +61,7 @@ in spirit):
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from fractions import Fraction
 from math import log, sqrt
 from typing import Callable
 
@@ -166,6 +167,7 @@ class GateDecision:
     fallback_holdout_accuracy: float
     fallback_kind: str | None        # which fallback was actually used
     certificate: str                 # the inequality that was checked
+    paired_counts: tuple | None = None  # (n+, n0, n-): determine D_hat and V
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -250,13 +252,20 @@ def certify_release(
     candidate_preds = np.asarray(candidate_preds)
     if candidate_preds.shape != y.shape:
         raise ValueError("candidate predictions must match labels")
-    cand_loss = (candidate_preds != y).astype(float)
-    fb_loss = (fallback_preds != y).astype(float)
+    cand_loss = (candidate_preds != y).astype(int)
+    fb_loss = (fallback_preds != y).astype(int)
     z = cand_loss - fb_loss
-    d_hat = float(np.mean(z))
+    # Exact statistics from integer paired counts (n+, n0, n-); the
+    # margin is computed in floats and then inflated to a conservative
+    # upper enclosure before an EXACT rational comparison, so floating
+    # point can only make the gate stricter, never looser (math audit E4).
+    n_plus = int(np.sum(z == 1)); n_minus = int(np.sum(z == -1))
+    d_hat_exact = Fraction(n_plus - n_minus, m)
+    d_hat = float(d_hat_exact)
     margin, which = paired_margin(z, delta, n_candidates, bound=bound)
+    margin_upper = Fraction(margin).limit_denominator(10**12) * Fraction(1 + 2**-40) + Fraction(1, 10**12)
 
-    accept = d_hat + margin <= epsilon
+    accept = d_hat_exact + margin_upper <= Fraction(str(epsilon))
     return GateDecision(
         released="candidate" if accept else "fallback",
         reason=(
@@ -266,6 +275,7 @@ def certify_release(
         margin=margin,
         bound_used=which,
         paired_loss_difference=d_hat,
+        paired_counts=(n_plus, m - n_plus - n_minus, n_minus),
         candidate_holdout_accuracy=float(np.mean(candidate_preds == y)),
         certificate=(
             f"family-level: Pr[L(released) > L(fallback) + {epsilon}] "
@@ -346,3 +356,90 @@ def theorem_fallback(task: str, n_coeffs: int = 1000):
 
     predict.fallback_kind = kind  # recorded by gate_rule_code
     return predict
+
+
+# -- exact ternary comparator (not used for release) --------------------------
+
+def clopper_pearson_upper(k: int, n: int, alpha: float) -> float:
+    """Exact one-sided upper confidence bound for a binomial proportion."""
+    from scipy.stats import beta
+
+    if k >= n:
+        return 1.0
+    return float(beta.ppf(1 - alpha, k + 1, n - k))
+
+
+def exact_ternary_pvalue(
+    n_plus: int, n_zero: int, n_minus: int, epsilon: float,
+    rho_grid: int = 4000, rho_upper: float | None = None,
+) -> float:
+    """Exact finite-sample p-value for the release hypothesis
+    H1: Delta = p_+ - p_- <= epsilon, using the sum statistic S = N_+ - N_-.
+
+    (N_+, N_0, N_-) ~ Multinomial(m; p_+, p_0, p_-). Under the boundary
+    null Delta = epsilon, the law of S depends on the nuisance
+    rho = p_+ + p_- in [epsilon, 1]; the reported value is
+    sup_rho Pr_rho[S <= s_obs], with the supremum taken over a dense
+    grid (`rho_grid` points), so it is a grid APPROXIMATION of the
+    exact supremum, not a certified upper bound (math audit A6). Release
+    when p <= delta/K would be a valid finite-sample rule IF the sup
+    were certified; here it is offered as an independently specified
+    COMPARATOR to the Bernstein gate, to report which is more powerful
+    on real paired counts. Stochastic monotonicity in Delta justifies
+    restricting to the boundary.
+
+    Without `rho_upper` the supremum is attained at LARGE rho (high
+    variance), which discards the observed low disagreement rate that
+    the Bernstein margin exploits -- on the paper's worked example
+    (72, 1906, 22) the unrestricted test gives p = 0.136 and does NOT
+    certify, where Bernstein does. Passing `rho_upper` (e.g. a
+    Clopper-Pearson upper bound on rho from M = n_+ + n_- at part of the
+    budget) restricts the nuisance to [epsilon, rho_upper] and recovers
+    that information; the two budgets must then be summed.
+
+    Conservative by discreteness and nuisance maximization. O(m^2) per
+    grid point in the naive implementation below; fine for m <= 20000
+    with a coarse grid, slow beyond.
+    """
+    from math import comb as _comb, exp, lgamma, log as _log
+
+    m = n_plus + n_zero + n_minus
+    s_obs = n_plus - n_minus
+    if not (0 <= epsilon <= 1):
+        raise ValueError("epsilon must be in [0, 1]")
+    if epsilon >= 1:
+        return 1.0
+
+    def log_pmf(a, c, pp, pm):
+        # Pr[N+ = a, N- = c] with N0 = m - a - c
+        b = m - a - c
+        if b < 0:
+            return -float("inf")
+        p0 = 1 - pp - pm
+        if p0 <= 0 and b > 0:
+            return -float("inf")
+        val = lgamma(m + 1) - lgamma(a + 1) - lgamma(b + 1) - lgamma(c + 1)
+        val += (a * _log(pp) if a else 0.0) + (c * _log(pm) if c else 0.0)
+        val += (b * _log(p0) if b else 0.0)
+        return val
+
+    hi = 1.0 if rho_upper is None else max(epsilon, min(1.0, rho_upper))
+    best = 0.0
+    for i in range(rho_grid + 1):
+        rho = epsilon + (hi - epsilon) * i / rho_grid
+        pp = (rho + epsilon) / 2
+        pm = (rho - epsilon) / 2
+        if pp <= 0:
+            continue
+        total = 0.0
+        # sum over (a, c) with a - c <= s_obs
+        for a in range(0, m + 1):
+            c_min = max(0, a - s_obs)
+            for c in range(c_min, m - a + 1):
+                if pm <= 0 and c > 0:
+                    break
+                lp = log_pmf(a, c, pp, max(pm, 1e-300))
+                if lp > -700:
+                    total += exp(lp)
+        best = max(best, min(total, 1.0))
+    return best

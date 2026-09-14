@@ -482,7 +482,28 @@ $m\ge[\sqrt{2\ln(2K/\delta)}+\sqrt{2\ln 20}]^2/(\epsilon-\Delta)^2
 \approx7.4\times10^4$; the actual power under the ternary law is
 higher and this is not a necessity claim. Every gate number in this
 paper is from the rule as stated (min of the two radii, $K$ given per
-experiment); \S\ref{sec:gateoc} reports both gates side by side.
+experiment); \S\ref{sec:gateoc} reports both gates side by side. The
+implementation computes $\hat\Delta$ exactly from the integer paired
+counts, inflates the floating-point margin to a conservative upper
+enclosure, and compares in exact rational arithmetic, so rounding can
+only make the gate stricter.
+
+\paragraph{An exact ternary comparator} Since $Z\in\{-1,0,1\}$, an
+exact finite-sample test exists: with $(N_+,N_0,N_-)$ multinomial and
+$S=N_+-N_-$, reject $\Delta>\epsilon$ when
+$\sup_{\rho\in[\epsilon,\rho_U]}\Pr_{\Delta=\epsilon,\rho}[S\le s_{\mathrm{obs}}]\le\delta'$,
+where $\rho=p_++p_-$ is the disagreement rate. The nuisance bound
+matters: unrestricted, the supremum sits at high $\rho$ and discards
+the low observed disagreement---on the worked example above the
+unrestricted test gives $p=0.136$ and does not certify. Bounding
+$\rho$ first by a Clopper--Pearson upper limit from $M=N_++N_-$
+($\rho_U=0.057$ at $\alpha=0.025$) and spending the remaining budget on
+the sup gives $p\approx2\times10^{-7}$: far more powerful than the
+Bernstein margin, which certified the same example only at
+$0.0495\le0.05$. We report this as an independently specified
+comparator (its supremum is evaluated on a dense grid, not certified),
+not as the release rule; making it the release rule is a clear
+improvement for future work.
 
 The bound has no factor in the number of agents $N$ or the number of
 compromised agents $k\le N$: all agents may be compromised and submit
