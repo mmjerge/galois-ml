@@ -251,6 +251,16 @@ def main() -> None:
 
     done: list[dict] = (json.loads(RESULTS.read_text())
                         if RESULTS.exists() else [])
+    # Failed rows from a logged-out session are infrastructure failures,
+    # not experimental outcomes: purge them so the record reflects only
+    # runs that actually executed. (Failures for other reasons are kept.)
+    purged = [r for r in done if not r.get("valid")
+              and _is_credential_error(r.get("error"))]
+    if purged:
+        done = [r for r in done if r not in purged]
+        RESULTS.write_text(json.dumps(done, indent=1))
+        print(f"purged {len(purged)} credential/transport failures from the "
+              f"record (their tickets are re-queued)", flush=True)
     done_tickets = {r["ticket"] for r in done if r.get("valid")}
     order = tickets()
     todo = [t for t in order if t["ticket"] not in done_tickets]
@@ -290,10 +300,19 @@ def main() -> None:
 
 
 def _is_credential_error(err) -> bool:
+    """Anything that means 'no usable credentials right now'. Missing
+    CredentialRetrievalError here once let a logged-out session burn 96
+    tickets as failures in minutes instead of pausing; the list is
+    deliberately broad, and transient network errors are included since
+    retrying the same ticket is always safe (nothing is consumed)."""
     s = str(err or "")
     return any(k in s for k in (
         "UnrecognizedClientException", "ExpiredToken", "security token",
-        "Bearer Token", "InvalidSignature",
+        "Bearer Token", "InvalidSignature", "CredentialRetrievalError",
+        "NoCredentialsError", "You need to authenticate",
+        "Unable to locate credentials", "EventLoopException",
+        "Read timed out", "ThrottlingException", "TooManyRequests",
+        "ServiceUnavailable", "EndpointConnectionError",
     ))
 
 
