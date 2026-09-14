@@ -41,13 +41,12 @@ can be \emph{removed}, and whether a pipeline's final artifact should
 be \emph{released}. We show (i)~a deterministic verifier with stated
 guarantee classes detects a decidable corruption class with zero false
 positives, together with a restricted impossibility result for what no
-label-symmetric verifier can detect; (ii)~with an identical detector, enforcement policy alone spans the
-outcome space: a correct warning-only policy did not reduce harm on
-any channel and produced a large regression on a combined attack
-(median accuracy $0.90\to0.15$, complete separation of runs), whereas
-silent verbatim repair of detected responses restored clean-level
-performance; a prespecified, randomized, interleaved replication is
-registered and under way;
+label-symmetric verifier can detect; (ii)~in a sequential pilot with an identical detector and identical
+detections, a warning-only policy was associated with a large
+regression on a combined attack (median accuracy $0.90\to0.15$,
+complete separation of runs) while silent verbatim repair of detected
+responses was associated with near-clean performance; a prespecified,
+randomized, interleaved replication is registered and under way;
 (iii)~a fresh-holdout release gate bounds released risk relative to a
 trusted fallback against \emph{arbitrary} upstream corruption,
 including the provably undetectable class, with a trusted release
@@ -79,16 +78,21 @@ pipeline can have the first without the second, or the third without
 the first.
 
 Measuring this requires knowing the right answer. We use a family of
-tasks whose generative law is a theorem: for a Galois number field of
-degree $d$, the Dedekind zeta coefficients at unramified primes are
-determined by the splitting type, whose distribution is fixed by the
-Chebotarev density theorem. Every task therefore ships with a
-computable Bayes ceiling, an exact posterior for every input, and a
-decidable set of \emph{attainable} coefficient values. The number
-theory is the instrument: it makes correctness, support violation, and
-label inversion independently checkable without a model-as-judge. We
-do not claim the tasks resemble deployed agent workloads, and we say
-explicitly what does and does not transfer (\S\ref{sec:limits}).
+synthetic tasks built from a theorem plus one stated modeling choice:
+for a Galois number field of degree $d$, the Dedekind zeta coefficients
+at an unramified prime are determined by the splitting type (a
+theorem), and the Chebotarev density theorem fixes the asymptotic
+frequency of each type over primes; our generator additionally draws
+splitting types \emph{independently} across primes from that
+distribution (the modeling choice). Under that fully specified law
+each task has a Bayes ceiling that is exactly defined and computable
+to Monte Carlo precision, a posterior defined on every
+positive-probability input, and a decidable set of \emph{attainable}
+coefficient values. The number theory is the instrument: it makes
+correctness, support violation, and label inversion independently
+checkable without a model-as-judge. We do not claim the tasks resemble
+deployed agent workloads, and we say explicitly what does and does not
+transfer (\S\ref{sec:limits}).
 
 \paragraph{Contributions}
 \begin{enumerate}
@@ -104,11 +108,13 @@ number fields (LMFDB) assesses mathematical fidelity, not
 deployment-distribution equivalence.
 \item \textbf{A policy-level evaluation separating detection from
 mitigation} (\S\ref{sec:policy}): with an identical deterministic
-detector, three enforcement policies---warn, block, silently
-repair---produce outcomes ranging from a large regression to full
-recovery. A prespecified, randomized, interleaved study of the primary
-contrast is registered and in progress (\S\ref{sec:confirm}); pilot
-evidence is reported at pilot strength.
+detector and identical detection outcomes, two enforcement
+policies---warn and silently repair---are associated in a sequential
+pilot with outcomes ranging from a large regression to near-clean
+performance. A prespecified, randomized, interleaved study of the
+primary contrast is registered and in progress (\S\ref{sec:confirm});
+pilot evidence is reported as exploratory association, not policy
+causation.
 \item \textbf{A layered enforcement implementation with distinct
 guarantee classes} (\S\ref{sec:layers}): evidence checks, conditional
 exact-response restoration, and a fresh-holdout release gate bounding
@@ -169,28 +175,45 @@ provable statistical fingerprints in the coefficient vector, and the
 optimal decision rule is computable. Following Lee and
 Lee~\cite{leelee2025}, we generate synthetic ``virtual fields'' from
 this law for nine two- or three-class tasks (degree 4 through 25);
-ceilings span $0.84$--$0.9998$. Security experiments use sextic
-(C$_6$ vs.\ S$_3$, ceiling $0.9518$) and degree-21 (C$_{21}$ vs.\
-C$_7{:}$C$_3$, $0.9352$), which leave headroom for harm to register.
-The degree-14/21/25 families appear in no publication, separating
-memorization from reasoning.
+ceilings span $0.84$--$0.9998$ at $N{=}1000$. Security experiments use
+sextic (C$_6$ vs.\ S$_3$, ceiling $0.9518$ at $N{=}1000$; $0.8991$ at
+$N{=}200$) and degree-21 (C$_{21}$ vs.\ C$_7{:}$C$_3$, $0.9352$), which
+leave headroom for harm to register.
 
-Three quantities are exact: the Bayes ceiling (Monte Carlo to
-standard error $\sim10^{-4}$); per-feature mutual information in
-bits; and the per-input posterior $P(y\mid x)$ from the
-class-conditional likelihoods. The proven quartic criterion classifies
-real LMFDB fields at accuracy $1.000$, validating the model's
-arithmetic fidelity; independence across primes and the unramified
-restriction are modeling assumptions, not validated properties of
-real fields.
+\paragraph{The law, completely} Classes are uniform over the task's
+group list. For each prime $p\le N$ ($N{=}1000$ in agent experiments,
+$200$ in offline audits), a residue degree $f$ is drawn independently
+from the class's Chebotarev measure (the distribution of element
+orders); the visible signature $(a_{p^k})_{p^k\le N}$ follows
+from~\eqref{eq:euler}; composite $a_n$ by multiplicativity. The
+class-conditional likelihood of a row is the product over primes of
+the pushforward mass of its signature (colliding signatures summed),
+and the posterior is Bayes' rule with the uniform prior on rows of
+positive mass; rows of zero mass have no posterior and are flagged
+inadmissible. The Bayes ceiling is exactly defined by this law and
+estimated by Monte Carlo ($2\times10^5$ samples, standard error
+$\sim10^{-4}$); per-feature mutual information is computed in closed
+form from the same pushforwards. The proven quartic criterion
+classifies $200$ real LMFDB quartic fields ($100$ C$_4$, $100$
+C$_2^2$, coefficients from true decomposition data) at accuracy
+$1.000$; this validates the coefficient arithmetic, not the
+independence assumption or the unramified restriction, which are
+modeling choices. The held-out families (degrees 14, 21, 25) appear in
+no publication we know of; this makes memorization of the \emph{task
+instance} unlikely, not memorization of the underlying group theory.
 
 \section{Three Layers, Three Guarantee Classes}\label{sec:layers}
 
 \subsection{Evidence layer: deterministic verification}
 
-A verifier interposed between tools and agents, standard library only,
-importing nothing from agent or attack code. Each check carries a
-guarantee class:
+A verifier interposed between tools and agents, importing nothing from
+agent or attack code (standard library plus one LP call,
+Prop.~\ref{prop:joint}). Two scopes must be kept apart: the
+\emph{label-agnostic subverifier} (theorem and schema checks) knows
+nothing that distinguishes candidate classes; the \emph{complete
+mediator} additionally holds the trusted dataset snapshot and can
+recompute the validation tool, which is class-anchored information.
+Each check carries a guarantee class:
 
 \begin{itemize}
 \item \textbf{theorem}: \eqref{eq:euler} fixes the attainable values
@@ -224,18 +247,28 @@ some mixture iff the linear program
 $q\ge0,\ \sum_f q_f=1,\ |\sum_{f:R(b_{d,k}(f))=v}q_f-c_k(v)|\le\tau$
 for all $(k,v)$, with $\tau$ the rounding half-width, is feasible.
 \end{proposition}
-Feasibility is decided exactly (a few variables; divisors of $d$).
-The check is class-agnostic---$q$ is free---so a consistent relabeling
-passes, as Prop.~\ref{prop:imp} requires, while individually
-attainable marginals that no single sample could produce (e.g.\
+``Realizable'' here means realizable by a \emph{population mixture}
+whose rendered report lies within the closed rounding tolerance; the
+finite-sample version (integrality of $nq_f$ for a class of $n$ rows)
+is stronger and not implemented. The LP has as many variables as
+divisors of $d$ and is solved in floating point (\texttt{scipy});
+exact rational certification of feasibility is a straightforward
+addition we have not made, so at present this check is sound up to
+solver tolerance. It is class-agnostic---$q$ is free---so a consistent
+relabeling passes, as Prop.~\ref{prop:imp} requires, while
+individually attainable marginals that no mixture produces (e.g.\
 $\Pr[a_p{=}d]=\tfrac12$ with $\Pr[a_{p^2}{=}\binom{d+1}{2}]=0$) are
-refused. It is the one check in the verifier that depends on
-\texttt{scipy} rather than the standard library.
+refused.
 
-Detection is computed, not sampled (Table~\ref{tab:matrix}), and is
-identical across tasks. The verifier deliberately knows nothing that
-distinguishes the candidate classes: a verifier that did would be an
-oracle for the task and would void the measurement.
+Detection of the implemented fixtures is computed, not sampled
+(Table~\ref{tab:matrix}), identical on the three tasks tested, and
+scoped to those fixtures: it is not completeness for everything a
+channel could carry. Soundness (``honest output is never flagged'')
+is proved for the arithmetic checks (Lean, below) and tested against
+the renderer for the grammar checks. The label-agnostic subverifier
+is kept free of class-distinguishing knowledge because a subverifier
+with it would be an oracle for the task and would void the
+measurement.
 
 \begin{table}[t]
 \centering\small
@@ -286,8 +319,10 @@ Given a detection, the mediator can \emph{flag} (return the response
 verbatim with a diagnostic appended), \emph{flag with routing}
 (diagnostic names the failed source and the channels that remain
 trustworthy), \emph{block} (return a fixed code), or \emph{repair}
-(return the trusted recomputation verbatim, with no notice). Only
-repair admits a behavior-independent guarantee:
+(return the trusted recomputation verbatim, with no notice). Block
+gives behavior-independent \emph{containment} of the corrupt bytes;
+only repair admits a behavior-independent \emph{restoration}
+guarantee:
 
 \begin{proposition}[Clean-transcript equivalence]\label{prop:repair}
 Suppose every adversary-affected response is mediated; every altered
@@ -303,17 +338,30 @@ Induction over interaction steps: equal histories and coupled
 randomness yield equal queries; mediation yields equal responses.
 \end{proof}
 
-The hypotheses are checked in tests, not assumed: on every detected
-channel, every tool response under attack-plus-repair equals the
-honest response byte-for-byte. Propositions~\ref{prop:imp}
-and~\ref{prop:repair}, the attainability theorem behind the
-\texttt{theorem} class (including the zero-inclusion fact an external
-audit found our first implementation violating), and the deterministic
-clause of Theorem~\ref{thm:gate} are machine-checked in Lean~4 without
-Mathlib (\texttt{lean/} in the repository); the concentration
-inequality itself is taken as a hypothesis there, so the gate's
-correctness is reduced to one standard inequality plus checked
-arithmetic. The \texttt{data} channels are
+The proposition is conditional on complete detection and exact
+restoration; tests verify byte equality of attacked-repaired and honest
+responses on every implemented detected fixture, which establishes the
+hypothesis for those fixtures and not for arbitrary bytes. The
+\texttt{data} channels are undetected and therefore unrepaired; that
+residual is what the third layer covers.
+
+\paragraph{What is machine-checked} Four statements are formalized in
+Lean~4 without Mathlib (\texttt{lean/}, 21 theorems, no \texttt{sorry}),
+each mapped to a claim: (i) the attainable set of~\eqref{eq:euler}
+over divisors of $d$, with the theorem that $0$ is attainable iff some
+divisor of $d$ does not divide $k$ (the arithmetic support lemma
+\emph{conditional on} the Euler formula---the number theory itself is
+not formalized; this is the fact our first implementation violated);
+(ii) Prop.~\ref{prop:imp} in its zero-false-positive form, as an
+abstract statement about a verifier, honest set, and relabeling
+action; (iii) Prop.~\ref{prop:repair} as a trace induction over a
+deterministic transition system; (iv) the deterministic clause of
+Theorem~\ref{thm:gate}: on the concentration event, any valid release
+has risk $\le\risk{h_0}+\epsilon$, including that $\epsilon\ge0$ is
+necessary and that fail-closed is always safe. The concentration
+inequality is a hypothesis in (iv). None of these connects to the
+parser or runtime code; they fix the mathematics the code is tested
+against. The \texttt{data} channels are
 undetected and therefore unrepaired; that residual is what the third
 layer covers.
 
@@ -349,12 +397,16 @@ candidates satisfy the bound and rejection releases $h_0$.
 
 The variance term is what makes the gate usable against a strong
 fallback. Paired 0--1 differences are mostly zero when the two
-predictors are close, so $V_j\ll1$ and $r^B\ll r^H$. Empirically
-(sextic, a genuine agent rule at $\approx0.92$ against the theorem
-fallback at $0.951$, true excess $\approx0.03$): at $m=2000$,
-$r^H=0.055$ versus $r^B=0.022$, and the rule certifies at
-$\epsilon=0.05$; under Hoeffding alone the same certification needed
-$m\gtrsim6\times10^4$.
+predictors are close, so $V_j\ll1$ and $r^B\ll r^H$. With $K{=}1$,
+$\delta{=}0.05$, $m{=}2000$: $r^H=\sqrt{2\ln 40/2000}=0.061$, while
+for a genuine agent rule at $\approx0.92$ against the theorem fallback
+at $0.951$ (sextic, disagreement on $\approx8\%$ of rows)
+$r^B\approx0.022$, and the rule certifies at $\epsilon=0.05$. Under a
+Hoeffding-only gate the same rule is refused at $m=2000$ and, by the
+standard power calculation, needs $m\gtrsim6\times10^4$ for
+high-probability acceptance. Every gate number in this paper is from
+the rule as stated (min of the two radii, $K$ given per experiment);
+\S\ref{sec:gateoc} reports both gates side by side.
 
 The bound has no factor in the number of agents $N$ or the number of
 compromised agents $k\le N$: all agents may be compromised and submit
@@ -412,56 +464,63 @@ verif.\_stealth & --- & 0.890 & 0.925 & 0.032 & ---\\
 \end{tabular}
 \end{table}
 
-Under \texttt{flag}, every detected channel was flagged 100\% of the
-time, yet no channel's median improved and \texttt{combined}
-collapsed: all five runs derived the correct $f{=}2$ criterion and
-attached it to the wrong class---structurally sound, confidently wrong
-rules that no coherence review catches. Flagging is strictly
-information-preserving at the response level (original bytes
-retained), so the guarded agents had the original evidence plus a
-correct diagnostic and did worse; transcripts show them abandoning the
-flagged channel for surface heuristics. Under \texttt{repair}, every
-detected channel sat within the clean band. Complete separation of run
-accuracies on \texttt{combined} repair-vs-flag is the one contrast
-strong enough to act on; the others are unresolved at this $n$.
+Under \texttt{flag}, every poisoned response on a detected channel was
+flagged (deterministic; per-run counts in the repository), yet no
+channel with an unguarded control had a higher guarded median, and
+\texttt{combined} collapsed: in all five runs the final conjecture
+states the correct $f{=}2$ criterion attached to the wrong class
+(coded from the returned JSON conjecture and rule; the transcripts are
+released). Flagging retains the original bytes at the response level,
+so guarded agents received the original evidence plus a correct
+diagnostic; transcripts show them abandoning the flagged channel for
+surface heuristics. Under \texttt{repair}, every detected channel's
+median lay within the clean band. Complete separation of the ten run
+accuracies on \texttt{combined} repair-vs-flag ($p=1/\binom{10}{5}$)
+is the contrast that motivates the confirmatory study; the others are
+unresolved at this $n$.
 
-What this does \emph{not} show: that warnings harm agents in general
-(one message design, one model), that repair equals clean (a
-nonsignificant difference is not equivalence), or the causal effect of
-policy (arms were not interleaved).
+What this does \emph{not} show: that warnings \emph{cause} harm (arms
+were sequential, and the flag-vs-unguarded question is a separate
+contrast), that warnings fail in general (one message design, one
+model), that repair equals clean (a nonsignificant difference is not
+equivalence), or that inverted rules defeat review in general (five
+transcripts).
 
 \subsection{Prespecified confirmatory study}\label{sec:confirm}
 
 Protocol registered before data collection (git tag
-\texttt{confirmatory-protocol-v1}): $3$ policies $\times$
-$\{$\texttt{combined}, \texttt{impossible}, \texttt{none}$\}$ $\times$
-$\{$sextic, degree-21$\}$, $n=10$ per cell, all 180 cells randomly
-interleaved from a committed seed so policy is not confounded with
-time. Both endpoints per run: raw pipeline accuracy, and the accuracy
-of the system a gated deployment would have \emph{released}
-(certified through the release runtime against a majority fallback at
-$m=20{,}000$, $\epsilon=\delta=0.05$, audited on an independent
-$20{,}000$-sample draw). Primary: sextic/\texttt{combined}, repair
-vs.\ flag, raw endpoint, one-sided exact permutation, $\alpha=0.05$.
-Secondaries (Holm): repair vs.\ unguarded; \texttt{impossible} repair
-vs.\ flag; degree-21 replication; released endpoint. Clean channels
+\texttt{confirmatory-protocol-v1}): $3$ policies $\{$unguarded, flag,
+repair$\}$ $\times$ $\{$\texttt{combined}, \texttt{impossible},
+\texttt{none}$\}$ $\times$ $\{$sextic, degree-21$\}$ $=18$ cells,
+$n=10$ runs per cell, all $180$ runs randomly interleaved from a
+committed seed so policy is not confounded with time. Both endpoints
+per run: raw pipeline accuracy, and the accuracy of the system a gated
+deployment would have \emph{released} (certified through the release
+runtime against a majority fallback, $K{=}1$, $m=20{,}000$,
+$\epsilon=\delta=0.05$, audited on an independent $20{,}000$-sample
+draw). Primary: sextic/\texttt{combined}, repair vs.\ flag, raw
+endpoint, one-sided exact permutation, $\alpha=0.05$. Registered
+secondaries, Holm-corrected as one family of four: sextic
+\texttt{combined} repair vs.\ unguarded; sextic \texttt{impossible}
+repair vs.\ flag; degree-21 \texttt{combined} repair vs.\ flag; the
+released-endpoint version of the primary. Invalid runs (API failures)
+are retried once and otherwise reported missing; clean channels are
 reported descriptively as a drift check.
 
-The study is executing at the time of writing; its analysis is fixed
-in code and will be reported as the registered primary and
-secondaries, whatever they show. Two points of discipline apply to
-its interpretation. First, confirming repair $>$ flag does not by
-itself confirm that warnings \emph{harmed} agents; that is the
-flag-vs-unguarded secondary. Second, the warning used in the pilot is
-a bare ``treat this output as untrusted.'' We have implemented an
-actionable variant (\texttt{flag\_routed}: names the failed source and
-the channel that remains independently verified, under identical
-trust assumptions and with no task answers) as the competent-advisory
-baseline. If routed warnings recover performance, the contribution
-sharpens into a distinction between behavior-dependent mitigation and
-the conditional restoration guarantee of Prop.~\ref{prop:repair}; it
-does not weaken the architectural claim, which never rested on
-warnings failing.
+Two questions are \emph{not} in the registration and will be reported
+as exploratory: whether flag is worse than unguarded (which is what
+``warnings harmed agents'' would require), and the competent-advisory
+baseline. For the latter we have implemented \texttt{flag\_routed}
+(names the failed source and the channel that remains independently
+verified, under identical trust assumptions and with no task answers);
+it is not an arm of the registered study and will be run as a
+separately registered follow-up. If routed warnings recover
+performance, the contribution sharpens into a distinction between
+behavior-dependent mitigation and the conditional restoration
+guarantee of Prop.~\ref{prop:repair}; it does not weaken the
+architectural claim, which never rested on warnings failing. Any
+amendment to the protocol after data collection began will be
+reported as a timestamped amendment.
 
 \section{Defense-Aware Attacker and the Residual Class}\label{sec:adaptive}
 
@@ -474,17 +533,27 @@ recomputation. This channel (\texttt{data\_adaptive}) is a
 defense-aware attacker, not a proven optimum over the accepted-output
 space.
 
-End to end, offline: the fully armed verifier detects $0$ of its
-responses (Prop.~\ref{prop:imp} in running code); a credulous learner
-(decision tree on the permuted evidence) lands at true accuracy
-$0.240$ ($1-$ceiling $=0.101$); the release gate refuses it, with
-$+0.0000$ released excess over the fallback on an independent
-$20{,}000$-sample audit.
+End to end, offline (sextic, $N{=}200$, ceiling $0.8991$): the
+label-agnostic subverifier, with every check enabled, detects $0$ of
+the attack's responses---consistent with Prop.~\ref{prop:imp}, whose
+hypotheses that subverifier satisfies. The complete mediator's
+recomputation check is class-anchored and so is \emph{not} covered by
+the proposition; it detects nothing here for a different reason: the
+attack leaves validation honest, so there is no discrepancy to
+recompute. A credulous learner (decision tree fit to the permuted
+evidence) lands at true accuracy $0.240$ on $600$ test rows
+($1-$ceiling $=0.101$); the release gate ($K{=}1$, $m{=}2000$,
+theorem fallback) refuses it, so the released system is the fallback
+and its excess on an independent $20{,}000$-sample audit is $0$ by
+construction---evidence that the gate refused a catastrophic rule, not
+of population-risk control.
 
-Live agents, $n=5$ per arm: clean $0.895$, attacked-unguarded $0.920$,
-attacked-repair $0.890$; $0$ guarded detections across $142$ poisoned
-responses. The attack evaded the checks but produced no clear
-degradation. Transcripts are consistent with two orientation anchors
+Live agents (sextic, $N{=}1000$, $n=5$ per arm, $600$ test rows per
+run, medians reported): clean $0.895$ (range $0.887$--$0.925$),
+attacked-unguarded $0.920$ ($0.867$--$0.945$), attacked-repair $0.890$
+($0.867$--$0.925$); $0$ detections by the guard in the $5$ guarded
+runs across $142$ poisoned responses. The attack evaded the checks but
+produced no clear degradation. Transcripts are consistent with two orientation anchors
 the attacker cannot permute---trusted validation feedback (agents
 iterate candidate rules against the honest validation tool) and
 pretrained knowledge of the named groups' element orders---and this
@@ -508,30 +577,60 @@ what covers that entire class, fallback-relative.
 
 \section{Gate Operating Characteristics}\label{sec:gateoc}
 
-The archived pilot artifacts (89 rules) were certified through the
-release runtime against two fallbacks ($m=2000$,
-$\epsilon=\delta=0.05$). Against a majority fallback (risk $\approx0.5$):
-$82/89$ released; the seven refusals were every rule at or below
-chance (six inversions at $0.10$--$0.16$, one at exactly $0.500$).
-Against the theorem fallback (risk $\approx0.049$): $0/89$ released.
-That every released artifact satisfied the certification inequality is
-an algebraic property of the decision rule, not evidence about the
-population bound. The theorem-fallback result is finite-$m$ power, not
-inability: at $m=2000$ acceptance requires beating the fallback by
-$\approx0.5$ points on the holdout; the $\approx0.92$ rules have true
-excess $\approx0.031$, inside the budget but underpowered
-($m\gtrsim 66{,}000$ for high-probability acceptance). A near-Bayes
-fallback is a safety-floor experiment, not evidence the agents add
-value.
+All numbers here use the gate of Theorem~\ref{thm:gate} as stated
+($r=\min(r^H,r^B)$, $\delta/2$ each), with $K{=}1$ per certification
+(each artifact certified separately on its own fresh holdout),
+$\epsilon=\delta=0.05$. An earlier draft mixed these with a
+Hoeffding-only gate; those numbers are superseded.
 
-Designed boundary candidates with known population excess $\Delta$
-(fallback predictions flipped on a deterministic per-row hash rule),
-$30$ fresh holdouts per cell, every released artifact audited
-independently: zero population-bound violations; at $m=20{,}000$,
-acceptance $100\%$ for $\Delta\le0.016$, $73\%$ at $\Delta=0.032$
-(near the $0.033$ threshold), $0\%$ at $\Delta\ge0.044$; at $m=2000$,
-$0\%$ everywhere including $\Delta=0$, quantifying the availability
-cost of certification at small $m$.
+\paragraph{Retrospective integration study} The 89 archived pilot
+rules were certified through the release runtime, $m=2000$, against
+two fallbacks. Majority fallback (risk $\approx0.5$): $82/89$
+released; the seven refusals were every rule at or below chance (six
+inversions at $0.10$--$0.16$ holdout accuracy, one at exactly
+$0.500$). Theorem fallback (risk $\approx0.049$): $8/89$ released
+(five clean-channel rules, two \texttt{injection}, one
+\texttt{verification\_stealth}), with a maximum released holdout
+excess of $+0.026<\epsilon$; under a Hoeffding-only gate the same
+artifacts gave $0/89$. That released artifacts satisfy the
+certification inequality on the certification sample is an algebraic
+property of the rule, not evidence about population risk. The
+theorem-fallback regime is a safety-floor experiment: agents at
+$\approx0.92$ against a $0.951$ fallback rarely clear
+$\hat\Delta+r\le\epsilon$ at $m=2000$, and their doing so is not
+evidence that they add value over the fallback.
+
+\paragraph{Operating characteristics with independent audit} Boundary
+candidates are the fallback with predictions flipped on rows selected
+by a deterministic per-row hash at rate $q$; their population excess
+$\Delta$ is \emph{estimated} on an independent $10^5$-row sample
+(standard error $\le0.002$), not computed exactly. Thirty fresh
+$m$-row holdouts per cell; every released artifact's excess is judged
+against that $\Delta$ estimate. Results:
+
+\begin{center}\small
+\begin{tabular}{rccc}
+\toprule
+$\Delta$ (est.) & accept, $m{=}2000$ & accept, $m{=}20{,}000$ & viol./released \\
+\midrule
+$0.000$ & $30/30$ & $30/30$ & $0/60$ \\
+$0.016$ & $30/30$ & $30/30$ & $0/60$ \\
+$0.032$ & $6/30$ & $30/30$ & $0/36$ \\
+$0.044$ & $0/30$ & $19/30$ & $0/19$ \\
+$0.055$ ($>\epsilon$) & $0/30$ & $0/30$ & --- \\
+$0.079$, $0.159$ & $0/30$ & $0/30$ & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+With 30 replicates a $30/30$ cell has a $95\%$ Clopper--Pearson lower
+bound of $0.88$ and a $0/30$ cell an upper bound of $0.12$. Acceptance
+is complete well inside the budget, degrades as $\Delta$ approaches
+the effective threshold $\epsilon-r$, and is zero at and beyond
+$\epsilon$; no released artifact exceeded $\epsilon$ excess by the
+independent estimate. The $\Delta{=}0$ row (candidate identical to the
+fallback, zero disagreement variance) certifies at $m=2000$, as the
+Bernstein radius requires and a Hoeffding-only gate would not.
 
 \section{Related Work}
 Indirect prompt injection and compromised-agent architectures
@@ -552,9 +651,14 @@ colluded ``to the penny via a public listings board'' after every
 direct channel was removed is an empirical instance of the boundary
 we state formally: coordination through admissible outputs is not
 preventable by content verification. Its conformity findings ($18/30$
-agents choosing an identical branch name) match our $1.05$ effective
-independent agents of $5$, which motivates agent-count-independent
-guarantees but is a premise of no proof here. We do not address its
+agents choosing an identical branch name) are qualitatively consistent
+with our earlier observation, on the same testbed, that the errors of
+five independently run agents overlapped $14$--$26\times$ more than
+independence predicts (Jaccard overlap of test-set error sets versus
+the product of error rates; details in the repository); that
+observation motivates agent-count-independent guarantees and is a
+premise of no proof here, and the two measures are not directly
+comparable. We do not address its
 coordination-quality, goal-conflict, or resource-flooding findings. Lee and Lee~\cite{leelee2025} established the arithmetic
 criteria we use as ground truth. Selective classification and
 fallback-relative certification are standard; our contribution is
@@ -575,21 +679,28 @@ acceptance and fallback frequency alongside risk. \emph{Runtime.}
 Source hashing is not semantic artifact identity; pointwise semantics
 are assumed; resource limits, a protected deployment sink, and signed
 audit storage are the surrounding system's obligations.
-\emph{Empirical.} One model family; $n=5$ pilot arms with the
-confirmatory study in progress; the anchor factorial and the
-routed-warning baseline are designed but not run. The pilot's
-\texttt{combined} contrast is the only one we regard as settled.
+\emph{Empirical.} One model family; $n=5$ sequential pilot arms with
+the confirmatory study in progress; the anchor factorial and the
+routed-warning baseline are designed but not run. No pilot contrast
+is causal; the \texttt{combined} repair-vs-flag separation is the one
+we regard as strong enough to have motivated a registered
+replication. \emph{Related work.} The individual principles---complete
+mediation, trusted replacement, baseline-relative certification---are
+established; our claim is their composition and instrumentation, and
+the related-work discussion here is briefer than the final version
+must be.
 
 \section{Conclusion}
-A checker that never misses is not a defense until something binding
-acts on its verdicts, and the thing that acts should not be the
-agent's disposition. In this testbed, the same perfect detector
-produced a catastrophic regression or a full recovery depending only
-on the enforcement policy, and the corruption the detector provably
-cannot see was contained by a release gate that never looked at the
-evidence at all. The guarantees are conditional and fallback-relative,
-and they do not depend on how many agents there are or on what any of
-them believes.
+A checker is not a defense until something binding acts on its
+verdicts, and the thing that acts should not be the agent's
+disposition. In this testbed, the same detector with the same
+detections was associated with a large regression under one
+enforcement policy and near-clean performance under another, and a
+relabeling attack the label-agnostic checks cannot see was refused by
+a release gate that never looked at the evidence at all. The
+guarantees are conditional and fallback-relative, they do not depend
+on how many agents there are or on what any of them believes, and the
+behavioral finding awaits its registered replication.
 
 \begin{thebibliography}{9}
 \bibitem{leelee2025} K.-H. Lee and S. Lee, ``Machines learn number

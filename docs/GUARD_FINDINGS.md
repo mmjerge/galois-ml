@@ -804,3 +804,60 @@ Cheapest credible external-data addition: rerun the existing pipeline
 on frozen genuine LMFDB fields (split by field, handle ramified primes
 explicitly, clean/combined/relabeling conditions, three policies,
 frozen artifacts evaluated independently).
+
+## 13. Sixth external review (SaTML PC review of the paper draft, 2026-09-11)
+
+Full text: `experiments/outputs/paper_response.md`. Score: **weak
+reject, confidence 4/5**; conditional weak accept if the confirmatory
+primary confirms AND the items below are fixed. Its single most
+valuable finding was ours to own:
+
+**The paper described two different gates.** Section IV stated the
+min(Hoeffding, Bernstein) theorem; Section VII reported operating
+characteristics from experiments run BEFORE the Bernstein margin was
+added (Hoeffding-only). The reviewer inferred the inconsistency from
+the numbers alone (0.055 vs the correct 0.061 for r^H at delta/2;
+"0/89 certify" vs "a 0.92 rule certifies at m=2000"). Fixed by
+rerunning `gate_archived_eval.py` and `adversary_eval.py` with the
+stated gate. Superseding numbers (sections 9 and 11.2 above are now
+historical; the paper carries the current ones):
+
+- Archived rules vs theorem fallback, m=2000: **8/89 released** (was
+  0/89 under Hoeffding-only); max released holdout excess +0.026 <
+  epsilon. Majority fallback unchanged at 82/89.
+- Boundary candidates, m=2000: Delta=0 and Delta=0.016 now certify
+  30/30 (were 0/30 under Hoeffding-only); Delta=0.032 6/30; zero at
+  Delta >= 0.044. m=20000: 30/30 through Delta=0.032, 19/30 at
+  Delta=0.044, zero beyond. Zero released artifacts exceeded epsilon
+  against the independent Delta estimate (0/175 released).
+- Boundary Delta values are ESTIMATED on 10^5 independent rows (se <=
+  0.002), not exact; the paper now says so.
+
+Other corrections applied to the paper: Prop 1 (indistinguishability)
+was being applied to the COMPLETE mediator, which holds class-anchored
+recomputation and is outside the proposition's hypotheses -- rescoped
+to the label-agnostic subverifier, with the honest explanation that
+the recomputation check detects nothing on `data_adaptive` because
+validation is left honest; "warn, block, repair" -> "warn, repair"
+(no block results exist); "180 cells" -> 18 cells x 10 runs;
+flag-vs-unguarded and `flag_routed` explicitly marked as NOT in the
+registration; the full synthetic law, priors, N, likelihood
+construction, MC sample size, and LMFDB sample (200 quartic fields)
+stated; "exact" disambiguated (defined vs Monte Carlo estimate);
+"memorization vs reasoning" narrowed; the 1.05-effective-agents number
+replaced with the underlying Jaccard measure and a non-comparability
+note; "perfect detector", "depending only on", "full recovery",
+"settled", "no coherence review catches" removed; "standard library
+only" corrected for the scipy LP; the Lean formalization scoped
+precisely (arithmetic lemma conditional on the Euler formula, abstract
+propositions, gate deterministic clause; nothing connects to parser or
+runtime code); "hypotheses checked in tests, not assumed" -> tests
+establish byte equality on implemented fixtures.
+
+Not yet addressed from this review: exact rational LP certification
+(currently float solver tolerance); the finite-sample integrality
+version of Prop 3; a fuller related-work treatment (reference
+monitors, prompt-injection defenses, baseline-relative certification,
+risk-controlling prediction); release of run-level pilot data and
+transcript coding as a supplementary artifact; a consolidated
+claim ledger (claim / assumptions / evidence / component / status).
